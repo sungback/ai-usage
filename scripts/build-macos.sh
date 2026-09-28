@@ -26,6 +26,17 @@ cp "$BINARY" "$APP_DIR/Contents/MacOS/ai-usage"
 chmod +x "$APP_DIR/Contents/MacOS/ai-usage"
 cp scripts/Info.plist "$APP_DIR/Contents/Info.plist"
 
+# 버전 키는 여기 하드코딩하지 말고 Cargo.toml에서 주입한다 — 어긋나면 Finder와
+# updater.rs의 is_version_newer가 서로 다른 버전을 읽는다. [package]로 한정하는 건,
+# 안 하면 의존성 크레이트의 `version = "0.62"`가 섞여 0.62가 앱 버전으로 나오기 때문.
+APP_VERSION=$(sed -n '/^\[package\]/,/^\[/s/^version *= *"\([^"]*\)".*/\1/p' Cargo.toml)
+if [ -z "$APP_VERSION" ]; then
+  echo "ERROR: could not read [package] version from Cargo.toml" >&2
+  exit 1
+fi
+plutil -replace CFBundleVersion -string "$APP_VERSION" "$APP_DIR/Contents/Info.plist"
+plutil -replace CFBundleShortVersionString -string "$APP_VERSION" "$APP_DIR/Contents/Info.plist"
+
 # Generate icns if iconutil is available
 if command -v iconutil >/dev/null 2>&1 && [ -f src/icons/256x256.png ]; then
     ICONSET_DIR="target/AppIcon.iconset"
