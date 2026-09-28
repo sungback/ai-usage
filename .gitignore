@@ -1,0 +1,41 @@
+# Rust build artifacts
+/target/
+
+# Cargo lock (optional for binaries, included by default)
+# Cargo.lock
+
+# Debug/log files
+*.log
+
+# IDE
+.idea/
+.vscode/
+.history/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Local release workflow helper
+workflow.cmd
+AGENTS.md
+
+# Local WinGet manifest generation output
+/manifests/
+test_bin/
+
+# Agent tooling state (oh-my-opencode)
+/.omo/
+/.codegraph/
+
+# Local bare mirrors. Only untracked ones: this repo's own .git is already tracked
+# and must never be matched. Use a named entry rather than a /*.git/ glob.
+MyAIMonitor-backup.git/
+MyAIMonitor-backup*.git/
+
+# etc
+.env

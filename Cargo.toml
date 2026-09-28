@@ -1,0 +1,80 @@
+[package]
+name = "ai-usage"
+version = "2.12.50"
+edition = "2021"
+rust-version = "1.95"
+license = "MIT"
+description = "AI Usage Monitor"
+repository = "https://github.com/sungback/ai-usage"
+
+[package.metadata.winres]
+CompanyName = "AI Usage Monitor"
+ProductName = "AI Usage Monitor"
+FileDescription = "AI Usage Monitor"
+OriginalFilename = "ai-usage.exe"
+InternalName = "AIUsage"
+LegalCopyright = "Copyright (C) 2026 sungback. MIT License."
+
+[dependencies]
+ureq = { version = "3.4", default-features = false, features = ["native-tls", "json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dirs = "6"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "webp"] }
+eframe = { version = "0.36", default-features = false, features = ["glow"] }
+egui_extras = { version = "0.36", features = ["svg"] }
+lucide-icons = "1.30"
+raw-window-handle = "0.6"
+zip = { version = "8.6", default-features = false, features = ["deflate"] }
+fontdue = "0.9.4"
+sha2 = "0.10"
+base64 = "0.22"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+tray-icon = "0.20"
+winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
+
+[target.'cfg(windows)'.dependencies.windows]
+version = "0.62"
+features = [
+    "Win32_Foundation",
+    "Win32_Globalization",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Accessibility",
+    "Win32_System_Registry",
+    "Win32_System_Time",
+    "Win32_System_Threading",
+    "Win32_Security",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Controls",
+    "Win32_UI_Controls_Dialogs",
+    "Win32_Graphics_Dwm",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_DirectComposition",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Storage_FileSystem",
+]
+
+[build-dependencies]
+epaint_default_fonts = "0.36"
+heck = "0.5"
+lucide-icons = "1.30"
+oxifont-subset = "0.2.2"
+proc-macro2 = "1"
+toml = "1.1"
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+codegen-units = 1
+panic = "abort"

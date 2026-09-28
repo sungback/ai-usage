@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_ASSET_NAME: ai-usage.exe
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: windows-release
+
+      - name: Build release binary
+        env:
+          ANTIGRAVITY_CLIENT_ID: ${{ secrets.ANTIGRAVITY_CLIENT_ID }}
+          ANTIGRAVITY_CLIENT_SECRET: ${{ secrets.ANTIGRAVITY_CLIENT_SECRET }}
+        run: cargo build --release
+
+      - name: Compute release checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash -Algorithm SHA256 -Path target/release/ai-usage.exe).Hash.ToLower()
+          Set-Content -Path target/release/ai-usage.exe.sha256 -Value $hash -NoNewline -Encoding ascii
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            target/release/ai-usage.exe
+            target/release/ai-usage.exe.sha256
+          generate_release_notes: true
+
+  build-macos:
+    runs-on: macos-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: macos-release
+
+      - name: Build macOS Apple Silicon (ARM64) Binary & App
+        env:
+          ANTIGRAVITY_CLIENT_ID: ${{ secrets.ANTIGRAVITY_CLIENT_ID }}
+          ANTIGRAVITY_CLIENT_SECRET: ${{ secrets.ANTIGRAVITY_CLIENT_SECRET }}
+        run: |
+          chmod +x scripts/build-macos.sh
+          ./scripts/build-macos.sh
+
+      - name: Compute release checksums
+        shell: bash
+        run: |
+          shasum -a 256 target/ai-usage-macos-arm64.zip | awk '{print $1}' > target/ai-usage-macos-arm64.zip.sha256
+          shasum -a 256 target/ai-usage-macos-arm64.dmg | awk '{print $1}' > target/ai-usage-macos-arm64.dmg.sha256
+          shasum -a 256 target/aarch64-apple-darwin/release/ai-usage | awk '{print $1}' > target/aarch64-apple-darwin/release/ai-usage.sha256
+
+      - name: Upload macOS Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            target/ai-usage-macos-arm64.zip
+            target/ai-usage-macos-arm64.zip.sha256
+            target/ai-usage-macos-arm64.dmg
+            target/ai-usage-macos-arm64.dmg.sha256
+            target/aarch64-apple-darwin/release/ai-usage
+            target/aarch64-apple-darwin/release/ai-usage.sha256
