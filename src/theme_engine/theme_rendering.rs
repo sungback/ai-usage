@@ -1075,25 +1075,31 @@ pub(super) fn load_image_cached(
     path: &Path,
 ) -> Result<Arc<image::DynamicImage>, image::ImageError> {
     type ImageCache = HashMap<PathBuf, (Option<std::time::SystemTime>, Arc<image::DynamicImage>)>;
+    // A widget references a handful of images; the cap only stops unbounded
+    // growth when themes are switched repeatedly. Overflow clears the cache
+    // and the entries still needed are re-decoded on demand.
+    const MAX_CACHED_IMAGES: usize = 64;
     static CACHE: OnceLock<Mutex<ImageCache>> = OnceLock::new();
     let modified = std::fs::metadata(path)
         .ok()
         .and_then(|metadata| metadata.modified().ok());
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-    if let Some((cached_modified, image)) = cache
-        .lock()
-        .unwrap_or_else(|error| error.into_inner())
-        .get(path)
-    {
-        if *cached_modified == modified {
-            return Ok(image.clone());
-        }
+    let cached = {
+        let guard = cache.lock().unwrap_or_else(|error| error.into_inner());
+        guard
+            .get(path)
+            .filter(|(cached_modified, _)| *cached_modified == modified)
+            .map(|(_, image)| image.clone())
+    };
+    if let Some(image) = cached {
+        return Ok(image);
     }
     let image = Arc::new(image::open(path)?);
-    cache
-        .lock()
-        .unwrap_or_else(|error| error.into_inner())
-        .insert(path.to_path_buf(), (modified, image.clone()));
+    let mut guard = cache.lock().unwrap_or_else(|error| error.into_inner());
+    if guard.len() >= MAX_CACHED_IMAGES {
+        guard.clear();
+    }
+    guard.insert(path.to_path_buf(), (modified, image.clone()));
     Ok(image)
 }
 
