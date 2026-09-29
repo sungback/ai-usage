@@ -34,6 +34,10 @@ const DOWNLOAD_EXE_NAME: &str = "update-download.exe";
 #[cfg(not(windows))]
 const DOWNLOAD_EXE_NAME: &str = "update-download";
 
+/// How often background update checks run. Windows arms `TIMER_UPDATE_CHECK`
+/// with it; macOS sleeps it between checks.
+pub const AUTO_UPDATE_CHECK_INTERVAL_SECS: u64 = 24 * 60 * 60;
+
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
@@ -165,6 +169,32 @@ pub fn begin_self_update(release: &ReleaseDescriptor) -> Result<(), String> {
     Ok(())
 }
 
+/// Whether a zip entry looks like the executable to install: `*.exe` on
+/// Windows, a file named `ai-usage` elsewhere (e.g. the
+/// `Contents/MacOS/ai-usage` inside the macOS app bundle; suffixed renames
+/// like `ai-usage-aarch64` also match). Anything else in the archive —
+/// READMEs, checksum sidecars, disk images — is never installable.
+fn is_installable_zip_entry(name: &str) -> bool {
+    if name.ends_with('/') {
+        return false;
+    }
+    #[cfg(windows)]
+    {
+        // Keep the historical case-sensitive match: release assets are
+        // lowercase `ai-usage.exe` and nothing else ends in `.exe`.
+        name.ends_with(".exe")
+    }
+    #[cfg(not(windows))]
+    {
+        let lower = name.to_ascii_lowercase();
+        if lower.ends_with(".sha256") || lower.ends_with(".dmg") {
+            return false;
+        }
+        let file_name = lower.rsplit('/').next().unwrap_or(&lower);
+        file_name == "ai-usage" || file_name.starts_with("ai-usage-")
+    }
+}
+
 fn unpack_zip_if_needed(source: &Path, stage_dir: &Path) -> Result<PathBuf, String> {
     let mut file = match File::open(source) {
         Ok(f) => f,
@@ -181,16 +211,7 @@ fn unpack_zip_if_needed(source: &Path, stage_dir: &Path) -> Result<PathBuf, Stri
         let mut exe_index = None;
         for i in 0..archive.len() {
             let item = archive.by_index(i).map_err(|e| format!("Corrupt zip entry: {e}"))?;
-            let name = item.name().to_string();
-            #[cfg(windows)]
-            if name.ends_with(".exe") {
-                exe_index = Some(i);
-                break;
-            }
-            #[cfg(not(windows))]
-            if name.ends_with("ai-usage")
-                || (!name.ends_with('/') && !name.contains('/'))
-            {
+            if is_installable_zip_entry(item.name()) {
                 exe_index = Some(i);
                 break;
             }
@@ -289,22 +310,34 @@ fn fetch_latest_release() -> Result<Option<ReleaseDescriptor>, String> {
                     .iter()
                     .find(|asset| {
                         let name = asset.name.to_ascii_lowercase();
-                        (name.contains("macos") || name.contains("darwin")) && (name.contains(arch) || name.contains("aarch64"))
+                        is_installable_release_asset(&name)
+                            && (name.contains("macos") || name.contains("darwin"))
+                            && (name.contains(arch) || name.contains("aarch64"))
                     })
                     .or_else(|| {
                         release.assets.iter().find(|asset| {
                             let name = asset.name.to_ascii_lowercase();
-                            (name.contains("macos") || name.contains("darwin")) && name.contains("universal")
+                            is_installable_release_asset(&name)
+                                && (name.contains("macos") || name.contains("darwin"))
+                                && name.contains("universal")
                         })
                     })
                     .or_else(|| {
                         release.assets.iter().find(|asset| {
                             let name = asset.name.to_ascii_lowercase();
-                            name.contains("macos") || name.contains("darwin")
+                            is_installable_release_asset(&name)
+                                && (name.contains("macos") || name.contains("darwin"))
                         })
                     })
                     .or_else(|| {
-                        release.assets.iter().find(|asset| !asset.name.to_ascii_lowercase().ends_with(".exe"))
+                        release.assets.iter().find(|asset| {
+                            let name = asset.name.to_ascii_lowercase();
+                            is_installable_release_asset(&name)
+                                && !name.ends_with(".exe")
+                                && (name.ends_with(".dmg")
+                                    || name.ends_with(".zip")
+                                    || name.starts_with("ai-usage"))
+                        })
                     })
             }
             #[cfg(all(not(windows), not(target_os = "macos")))]
@@ -312,7 +345,7 @@ fn fetch_latest_release() -> Result<Option<ReleaseDescriptor>, String> {
                 release
                     .assets
                     .iter()
-                    .find(|asset| !asset.name.ends_with(".exe") && !asset.name.ends_with(".zip"))
+                    .find(|asset| !asset.name.ends_with(".exe") && !asset.name.ends_with(".zip") && !asset.name.ends_with(".sha256"))
             }
         })
         .ok_or_else(|| {
@@ -331,6 +364,14 @@ fn fetch_latest_release() -> Result<Option<ReleaseDescriptor>, String> {
         asset_url: asset.browser_download_url.clone(),
         checksum_url,
     }))
+}
+
+/// Release assets that can actually be installed. Checksum sidecars share the
+/// binary's name stem (`ai-usage-macos-arm64.zip.sha256`), so name matching
+/// must exclude them or an update would download a digest as its payload.
+#[cfg(target_os = "macos")]
+fn is_installable_release_asset(lower_name: &str) -> bool {
+    !lower_name.ends_with(".sha256")
 }
 
 fn build_agent() -> Result<ureq::Agent, String> {
@@ -698,6 +739,30 @@ mod tests {
             sha256_hex(&mut "abc".as_bytes()).unwrap(),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn installable_zip_entries_reject_directories_readmes_and_sidecars() {
+        assert!(is_installable_zip_entry(
+            "AI Usage Monitor.app/Contents/MacOS/ai-usage"
+        ));
+        assert!(is_installable_zip_entry("ai-usage"));
+        assert!(is_installable_zip_entry("ai-usage-aarch64"));
+        assert!(!is_installable_zip_entry("AI Usage Monitor.app/"));
+        assert!(!is_installable_zip_entry("README.md"));
+        assert!(!is_installable_zip_entry("ai-usage.sha256"));
+        assert!(!is_installable_zip_entry(
+            "AI Usage Monitor.app/Contents/MacOS/ai-usage.sha256"
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn installable_zip_entries_accept_only_executables() {
+        assert!(is_installable_zip_entry("ai-usage.exe"));
+        assert!(!is_installable_zip_entry("README.md"));
+        assert!(!is_installable_zip_entry("ai-usage.exe.sha256"));
     }
 
     #[test]
