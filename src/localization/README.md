@@ -25,6 +25,6 @@ This is deliberately not supported. The menus expose no language selector, and
 loadable — a stored code other than `ko` falls back to Korean via
 `LanguageId::from_code` returning `None`. Reintroducing a second language means
 restoring the selector in both native menus (`src/platform/macos/tray.rs` and
-`src/context_menu/builtins.rs` via `ContextMenuAction::SetLanguage`), the
-`LanguageId::ALL` list, and the per-language menu command mapping in
+`src/context_menu/builtins.rs` via `ContextMenuAction::LegacySetLanguage`), the
+`generated::LANGUAGE_IDS` list, and the per-language menu command mapping in
 `src/window.rs`.
