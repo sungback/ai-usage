@@ -331,6 +331,38 @@ mod tests {
         assert_eq!(LanguageId::from_code("ja"), None);
     }
 
+    /// `language_from_env`는 비-Windows 전용이라 이 테스트도 같은 게이트를 답니다.
+    /// 환경변수를 건드리므로 전후로 원래 값을 복원합니다. (이 저장소의 다른
+    /// 테스트는 `LC_*`·`LANG`을 읽지 않아 병렬 실행과 충돌하지 않습니다.)
+    #[cfg(not(windows))]
+    #[test]
+    fn environment_variables_select_the_korean_locale() {
+        let keys = ["LC_ALL", "LC_MESSAGES", "LANG"];
+        let saved: Vec<Option<String>> = keys.iter().map(|key| std::env::var(key).ok()).collect();
+        let restore = || {
+            for (key, value) in keys.iter().zip(saved.iter()) {
+                match value {
+                    Some(value) => std::env::set_var(key, value),
+                    None => std::env::remove_var(key),
+                }
+            }
+        };
+
+        // `LC_ALL`이 우선하고, 인코딩 꼬리(`.UTF-8`)는 떼고 봅니다.
+        std::env::set_var("LC_ALL", "ko_KR.UTF-8");
+        std::env::set_var("LC_MESSAGES", "ja_JP.UTF-8");
+        std::env::set_var("LANG", "en_US.UTF-8");
+        assert_eq!(language_from_env(), Some(LanguageId::Korean));
+
+        // 모르는 언어만 있으면 `None`으로 "못 찾음"을 알립니다.
+        std::env::set_var("LC_ALL", "xx_XX.UTF-8");
+        std::env::set_var("LC_MESSAGES", "yy_YY.UTF-8");
+        std::env::set_var("LANG", "zz_ZZ.UTF-8");
+        assert_eq!(language_from_env(), None);
+
+        restore();
+    }
+
     #[test]
     fn the_translation_catalogue_is_sorted_and_populated() {
         let translations = LanguageId::Korean.locale().translations;

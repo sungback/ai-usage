@@ -164,7 +164,7 @@ mod tests {
     #[test]
     fn recording_appends_and_ignores_writes_before_enable() {
         let path = std::env::temp_dir().join(format!(
-            "ccum-log-record-{}-{}.log",
+            "ai-usage-log-record-{}-{}.log",
             std::process::id(),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
