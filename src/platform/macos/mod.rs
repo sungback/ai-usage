@@ -128,7 +128,7 @@ impl MacOsMonitorApp {
     }
 
     /// update_apply.trigger 파일 감지
-    fn check_apply_trigger(&mut self) {
+    fn check_apply_trigger(&mut self, event_loop: &ActiveEventLoop) {
         let trigger = crate::app_settings::app_data_directory().join("update_apply.trigger");
         if std::fs::metadata(&trigger).is_ok() {
             let _ = std::fs::remove_file(&trigger);
@@ -137,7 +137,9 @@ impl MacOsMonitorApp {
                     "update_apply.trigger touched, applying update {}",
                     release.latest_version
                 ));
-                let _ = crate::updater::begin_self_update(release);
+                if crate::updater::begin_self_update(release).is_ok() {
+                    event_loop.exit();
+                }
             }
         }
     }
@@ -155,7 +157,9 @@ impl MacOsMonitorApp {
                 }
                 "update" => {
                     if let Some(release) = &self.available_update {
-                        let _ = crate::updater::begin_self_update(release);
+                        if crate::updater::begin_self_update(release).is_ok() {
+                            event_loop.exit();
+                        }
                     }
                 }
                 "countdown" => {
@@ -242,7 +246,7 @@ impl ApplicationHandler<UserEvent> for MacOsMonitorApp {
         self.check_settings_change();
         self.check_refresh_trigger();
         self.check_update_trigger();
-        self.check_apply_trigger();
+        self.check_apply_trigger(event_loop);
         self.handle_menu_events(event_loop);
     }
 }

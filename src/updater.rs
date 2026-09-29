@@ -113,6 +113,11 @@ pub fn begin_self_update(release: &ReleaseDescriptor) -> Result<(), String> {
         std::env::current_exe().map_err(|e| format!("Unable to locate current executable: {e}"))?;
     ensure_target_location_writable(&current_exe)?;
 
+    #[cfg(target_os = "macos")]
+    if let Some(bundle) = enclosing_app_bundle(&current_exe) {
+        return apply_macos_bundle_update(release, &current_exe, &bundle);
+    }
+
     let stage_dir = updates_dir()?;
     std::fs::create_dir_all(&stage_dir)
         .map_err(|e| format!("Unable to create updater working directory: {e}"))?;
@@ -193,6 +198,90 @@ fn is_installable_zip_entry(name: &str) -> bool {
         let file_name = lower.rsplit('/').next().unwrap_or(&lower);
         file_name == "ai-usage" || file_name.starts_with("ai-usage-")
     }
+}
+
+/// Walk up from the running executable to the enclosing `.app` bundle, if any.
+/// A dev run from `target/` has no bundle ancestor and falls back to the
+/// helper flow below.
+#[cfg(target_os = "macos")]
+fn enclosing_app_bundle(exe: &Path) -> Option<PathBuf> {
+    exe.ancestors()
+        .find(|ancestor| {
+            ancestor
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("app"))
+        })
+        .map(Path::to_path_buf)
+}
+
+/// macOS in-place update without a helper process: replacing the inner binary
+/// of a running bundle is allowed, but it invalidates the bundle seal, so the
+/// bundle is re-signed ad-hoc before relaunching with `open`. No helper means
+/// Gatekeeper never sees a stray ad-hoc executable to reject.
+#[cfg(target_os = "macos")]
+fn apply_macos_bundle_update(
+    release: &ReleaseDescriptor,
+    current_exe: &Path,
+    bundle: &Path,
+) -> Result<(), String> {
+    let stage_dir = updates_dir()?;
+    std::fs::create_dir_all(&stage_dir)
+        .map_err(|e| format!("Unable to create updater working directory: {e}"))?;
+
+    let download_path = stage_dir.join(DOWNLOAD_EXE_NAME);
+    let partial_download_path = stage_dir.join(format!("{DOWNLOAD_EXE_NAME}.part"));
+    for stale in [&download_path, &partial_download_path] {
+        if stale.exists() {
+            let _ = std::fs::remove_file(stale);
+        }
+    }
+
+    download_release_asset(
+        &release.asset_url,
+        release.checksum_url.as_deref(),
+        &partial_download_path,
+        &download_path,
+    )?;
+    let binary_source = unpack_zip_if_needed(&download_path, &stage_dir)?;
+    replace_target_binary(current_exe, &binary_source)?;
+
+    let codesign = Command::new("codesign")
+        .arg("--force")
+        .arg("--deep")
+        .arg("--sign")
+        .arg("-")
+        .arg(bundle)
+        .no_window()
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .map_err(|e| format!("Downloaded update, but re-signing the app bundle failed: {e}"))?;
+    if !codesign.status.success() {
+        return Err(format!(
+            "Downloaded update, but re-signing the app bundle failed: {}",
+            String::from_utf8_lossy(&codesign.stderr).trim()
+        ));
+    }
+
+    Command::new("open")
+        .arg(bundle)
+        .no_window()
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| {
+            format!(
+                "The update was installed, but the app could not be restarted automatically: {e}"
+            )
+        })?;
+
+    let _ = std::fs::remove_file(&download_path);
+    if binary_source != download_path {
+        let _ = std::fs::remove_file(&binary_source);
+    }
+    Ok(())
 }
 
 fn unpack_zip_if_needed(source: &Path, stage_dir: &Path) -> Result<PathBuf, String> {
@@ -779,6 +868,21 @@ mod tests {
         let (owner, repo) = github_repo().expect("github_repo should parse successfully");
         assert_eq!(owner, "sungback");
         assert_eq!(repo, "ai-usage");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn enclosing_app_bundle_finds_the_bundle_root() {
+        assert_eq!(
+            enclosing_app_bundle(Path::new(
+                "/Applications/AI Usage Monitor.app/Contents/MacOS/ai-usage"
+            )),
+            Some(PathBuf::from("/Applications/AI Usage Monitor.app"))
+        );
+        assert_eq!(
+            enclosing_app_bundle(Path::new("/usr/local/bin/ai-usage")),
+            None
+        );
     }
 
     #[test]
