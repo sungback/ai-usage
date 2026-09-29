@@ -48,7 +48,8 @@ if command -v iconutil >/dev/null 2>&1 && [ -f src/icons/256x256.png ]; then
     sips -z 128 128   src/icons/256x256.png --out "$ICONSET_DIR/icon_128x128.png" 2>/dev/null || true
     sips -z 256 256   src/icons/256x256.png --out "$ICONSET_DIR/icon_128x128@2x.png" 2>/dev/null || true
     sips -z 256 256   src/icons/256x256.png --out "$ICONSET_DIR/icon_256x256.png" 2>/dev/null || true
-    sips -z 512 512   src/icons/256x256.png --out "$ICONSET_DIR/icon_256x256@2x.png" 2>/dev/null || true
+    sips -z 512 512   src/icons/512x512.png   --out "$ICONSET_DIR/icon_256x256@2x.png" 2>/dev/null || true
+    sips -z 512 512   src/icons/512x512.png   --out "$ICONSET_DIR/icon_512x512.png" 2>/dev/null || true
     iconutil -c icns "$ICONSET_DIR" -o "$APP_DIR/Contents/Resources/AppIcon.icns" 2>/dev/null || true
     rm -rf "$ICONSET_DIR"
 fi
