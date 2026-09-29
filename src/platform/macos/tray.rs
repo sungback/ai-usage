@@ -107,17 +107,17 @@ pub fn build_context_menu(
                 usage.weekly_label.as_deref().unwrap_or(strings.weekly_window),
                 weekly_pct
             );
-            let _ = menu.append(&MenuItem::new(header_text, false, None));
+            let _ = menu.append(&MenuItem::new(header_text, true, None));
             if let Some(reset_str) = format_reset_time(usage.session.resets_at) {
                 let _ = menu.append(&MenuItem::new(
                     format!("  {} {reset_str}", lang.text("Resets in:")),
-                    false,
+                    true,
                     None,
                 ));
             }
         }
     } else {
-        let _ = menu.append(&MenuItem::new(lang.text("Loading usage..."), false, None));
+        let _ = menu.append(&MenuItem::new(lang.text("Loading usage..."), true, None));
     }
 
     let _ = menu.append(&PredefinedMenuItem::separator());
