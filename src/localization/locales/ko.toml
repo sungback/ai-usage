@@ -46,6 +46,7 @@ cursor_token_expired_body = "Sign in to Cursor (or set CURSOR_SESSION_TOKEN), th
 "Collect usage from Anthropic" = "Anthropic에서 사용량 수집"
 "Collect usage from Google" = "Google에서 사용량 수집"
 "Collect usage from OpenAI" = "OpenAI에서 사용량 수집"
+"Check for updates" = "업데이트 확인"
 "Cursor" = "Cursor"
 "Duplicate" = "복제"
 "Enabled" = "사용"

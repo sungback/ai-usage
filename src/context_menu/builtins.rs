@@ -104,6 +104,7 @@ pub fn classic_context_menu() -> ContextMenuDocument {
             frequency,
             providers,
             settings,
+            ContextMenuItem::action("check-for-updates", "Check for updates", Action::CheckForUpdates),
             ContextMenuItem::action("toggle-widget", "Show widget", Action::ToggleWidget),
             ContextMenuItem::separator("root-separator"),
             ContextMenuItem::action("exit", "Exit", Action::Exit),

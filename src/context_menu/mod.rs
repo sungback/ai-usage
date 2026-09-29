@@ -62,6 +62,7 @@ pub fn rendered_label(
         "Reset Order" => {
             if language.code().starts_with("ko") { "순서 초기화" } else { "Reset Order" }
         }
+        "Check for updates" => language.text("Check for updates"),
         _ => label,
     };
     crate::theme_engine::format_template(translated, context)
@@ -110,6 +111,13 @@ mod tests {
                 && matches!(
                     &item.kind,
                     ContextMenuItemKind::Action { action: ContextMenuAction::ToggleWidget }
+                )
+        }));
+        assert!(menu.items.iter().any(|item| {
+            item.id == "check-for-updates"
+                && matches!(
+                    &item.kind,
+                    ContextMenuItemKind::Action { action: ContextMenuAction::CheckForUpdates }
                 )
         }));
         assert!(!serde_json::to_string(&menu).unwrap().contains("reset_position"));
@@ -164,6 +172,7 @@ mod tests {
         assert_eq!(rendered_label(ko, "Move Up", &ctx), "한 칸 앞으로 이동");
         assert_eq!(rendered_label(ko, "Move Down", &ctx), "한 칸 뒤로 이동");
         assert_eq!(rendered_label(ko, "Reset Order", &ctx), "순서 초기화");
+        assert_eq!(rendered_label(ko, "Check for updates", &ctx), "업데이트 확인");
     }
 
     #[test]
