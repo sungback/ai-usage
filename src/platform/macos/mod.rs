@@ -2,12 +2,10 @@
 //!
 //! 모듈 구조:
 //! - `startup`  : LaunchAgent 로그인 자동 실행 관리
-//! - `badge`    : 텍스트 기반 레거시 뱃지 렌더링
 //! - `tray`     : 트레이 메뉴 빌드 / 메뉴바 타이틀 계산
 //! - (mod.rs)   : 이벤트 루프, 폴링 스레드, run() 진입점
 
 pub mod startup;
-pub mod badge;
 pub mod tray;
 
 pub use startup::{is_startup_enabled, set_startup_enabled};
