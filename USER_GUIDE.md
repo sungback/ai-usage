@@ -111,6 +111,7 @@ Windows 환경에서는 작업표시줄 배지와 시스템 트레이를 통해 
 ## 7. 자동 업데이트
 
 - **확인 방법**: 메뉴의 **Check for updates** 항목.
+- **자동 확인**: 백그라운드에서 24시간마다 새 릴리스를 확인하고, 있으면 메뉴에 안내합니다.
 - **동작**:
   1. GitHub Releases에서 최신 릴리스(`v*` 태그)를 조회합니다.
   2. 현재 버전보다 최신일 때만 안내합니다.
@@ -131,7 +132,8 @@ Windows 환경에서는 작업표시줄 배지와 시스템 트레이를 통해 
   ```bash
   ./ai-usage --diagnose
   ```
-  이후 앱을 다시 시작하면 로그가 기록됩니다.
+  이후 앱을 다시 시작하면 로그가 기록됩니다. 기존 로그에 이어쓰려면
+  `--diagnose-append`를 사용하십시오.
 - **로그 파일 위치** (OS 임시 디렉터리의 `ai-usage.log`):
   - macOS: `$TMPDIR/ai-usage.log` (기본 `~/Library/Caches/TemporaryItems/`)
   - Windows: `%TEMP%\ai-usage.log`

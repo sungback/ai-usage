@@ -185,6 +185,7 @@ src/
 .\ai-usage.exe --diagnose
 ```
 
+- **이어쓰기**: 기존 로그를 지우지 않고 이어쓰려면 `--diagnose-append`를 대신 사용하십시오.
 - **로그 파일 위치**: OS 임시 디렉터리의 `ai-usage.log`
   - macOS: `$TMPDIR/ai-usage.log` (기본 `~/Library/Caches/TemporaryItems/`)
   - Windows: `%TEMP%\ai-usage.log`
