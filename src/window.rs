@@ -175,8 +175,6 @@ fn perform_update_action(hwnd: HWND) {
     }
 }
 
-const RETRY_BASE_MS: u32 = 30_000; // 30 seconds
-
 // Menu item IDs for update frequency
 const IDM_FREQ_1MIN: u16 = 10;
 const IDM_FREQ_5MIN: u16 = 11;
@@ -1051,7 +1049,7 @@ fn now_unix_secs() -> u64 {
 }
 
 fn update_check_interval() -> Duration {
-    Duration::from_secs(24 * 60 * 60)
+    Duration::from_secs(updater::AUTO_UPDATE_CHECK_INTERVAL_SECS)
 }
 
 fn auto_update_check_due(last_update_check_unix: Option<u64>) -> bool {
@@ -2540,10 +2538,10 @@ fn do_poll_once(hwnd: HWND) {
                             );
                             s.auth_watch_snapshot.clear();
                             s.retry_count = s.retry_count.saturating_add(1);
-                            let backoff = RETRY_BASE_MS.saturating_mul(
-                                1u32.checked_shl(s.retry_count - 1).unwrap_or(u32::MAX),
+                            let retry_ms = poller::poll_retry_backoff_ms(
+                                s.retry_count,
+                                s.poll_interval_ms,
                             );
-                            let retry_ms = backoff.min(s.poll_interval_ms);
                             unsafe {
                                 let _ = KillTimer(Some(hwnd), TIMER_RESET_POLL);
                                 SetTimer(Some(hwnd), TIMER_POLL, retry_ms, None);

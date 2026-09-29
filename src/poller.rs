@@ -119,6 +119,17 @@ fn poll_with(
 
 const MAX_CONCURRENT_PROVIDER_POLLS: usize = 3;
 
+/// Backoff before retrying a failed poll cycle, shared by the Windows message
+/// loop and the macOS poll thread so a failing endpoint is retried on the same
+/// schedule on both platforms: 30s, 60s, 120s… capped at the poll interval.
+pub fn poll_retry_backoff_ms(retry_count: u32, poll_interval_ms: u32) -> u32 {
+    const RETRY_BASE_MS: u32 = 30_000;
+    let shift = retry_count.saturating_sub(1).min(u32::BITS);
+    RETRY_BASE_MS
+        .saturating_mul(1u32.checked_shl(shift).unwrap_or(u32::MAX))
+        .min(poll_interval_ms)
+}
+
 fn poll_concurrently_with<F>(
     enabled_providers: ProviderSet,
     poll_provider: F,

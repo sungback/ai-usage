@@ -313,6 +313,7 @@ pub fn run() {
     let poll_proxy = proxy.clone();
     std::thread::spawn(move || {
         let mut last_poll = Instant::now() - Duration::from_secs(3600);
+        let mut consecutive_failures: u32 = 0;
         loop {
             let settings = crate::app_settings::load_settings();
             let poll_interval = Duration::from_millis(settings.poll_interval_ms as u64);
@@ -328,31 +329,45 @@ pub fn run() {
                     false,
                 ) {
                     Ok(mut data) => {
+                        consecutive_failures = 0;
                         data.select_accounts(&settings.accounts);
                         let _ = crate::app_settings::save_usage_cache(&data, true);
                         let _ = poll_proxy.send_event(UserEvent::UsageUpdated(Box::new(data)));
+                        last_poll = Instant::now();
                     }
                     Err(err) => {
                         crate::diagnose::log(format!("macOS poller::poll failed: {err:?}"));
+                        consecutive_failures = consecutive_failures.saturating_add(1);
+                        let backoff = Duration::from_millis(u64::from(
+                            crate::poller::poll_retry_backoff_ms(
+                                consecutive_failures,
+                                settings.poll_interval_ms,
+                            ),
+                        ));
+                        last_poll = Instant::now() - poll_interval.saturating_sub(backoff);
                     }
                 }
-                last_poll = Instant::now();
             }
         }
     });
 
-    // 업데이트 확인 스레드 (시작 3초 후)
+    // 업데이트 확인 스레드 (시작 3초 후, 이후 24시간마다)
     let update_proxy = proxy.clone();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_secs(3));
-        if let Ok(crate::updater::UpdateCheckResult::Available(release)) =
-            crate::updater::check_for_updates()
-        {
-            crate::diagnose::log(format!(
-                "macOS update found: {}",
-                release.latest_version
+        loop {
+            if let Ok(crate::updater::UpdateCheckResult::Available(release)) =
+                crate::updater::check_for_updates()
+            {
+                crate::diagnose::log(format!(
+                    "macOS update found: {}",
+                    release.latest_version
+                ));
+                let _ = update_proxy.send_event(UserEvent::UpdateChecked(Some(release)));
+            }
+            std::thread::sleep(Duration::from_secs(
+                crate::updater::AUTO_UPDATE_CHECK_INTERVAL_SECS,
             ));
-            let _ = update_proxy.send_event(UserEvent::UpdateChecked(Some(release)));
         }
     });
 
