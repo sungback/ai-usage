@@ -106,7 +106,12 @@ fn runtime_with_geometry(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+//! 모니터·작업표시줄 지리 정보 — 처음 보시는 분을 위한 안내.
+//!
+//! - 시작할 때와 화면 배치가 바뀔 때 모니터·작업표시줄 자리를 미리 재 둡니다.
+//! - 값만 들고 있고 네이티브 핸들은 안 들고 있어 읽는 쪽은 Win32 호출이 없습니다.
+
+use super::*;
 
     fn display() -> ThemeHostGeometry {
         ThemeHostGeometry {

@@ -1,3 +1,8 @@
+//! 마우스 입력 — 처음 보시는 분을 위한 안내.
+//!
+//! - 클릭 좌표를 받아 어느 화면 조각(서피스)을 눌렀는지 찾습니다.
+//! - `LPARAM`에 packed된 x·y를 풀어 쓰는 작은 도우미들이 모여 있습니다.
+
 use super::*;
 
 pub(super) fn surface_index_for_window(state: &AppState, hwnd: HWND) -> Option<usize> {

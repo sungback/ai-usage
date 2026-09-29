@@ -1,3 +1,8 @@
+//! Windows 네이티브 창·트레이 — 처음 보시는 분을 위한 안내.
+//!
+//! - 작업표시줄 위젯과 트레이 메뉴를 만들고, 메시지 루프에서 클릭·타이머를 받습니다.
+//! - `window/` 폴더의 작은 파일들이 실제 일(위치·마우스·메시지)을 나눠 맡습니다.
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};

@@ -21,7 +21,12 @@ trait CommandExtHelper {
 
 impl CommandExtHelper for Command {
     fn no_window(&mut self) -> &mut Self {
-        #[cfg(windows)]
+//! Codex 사용량 폴러 — 처음 보시는 분을 위한 안내.
+//!
+//! - 순서: 로컬 인증 파일에서 토큰 읽기 → 사용량 API 호출 → 세션·주간% 꺼내기.
+//! - Windows에서는 자식 프로세스를 띄울 때 새 창이 안 뜨게 `no_window`로 감쌉니다.
+
+#[cfg(windows)]
         {
             self.creation_flags(CREATE_NO_WINDOW);
         }

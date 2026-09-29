@@ -354,7 +354,11 @@ pub(super) fn execute_context_menu_action(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+//! 창에서 뜨는 컨텍스트 메뉴 연결 — 처음 보시는 분을 위한 안내.
+//!
+//! - 메뉴 문서를 읽어 화면에 띄우고, 실패하면 기본(Classic) 메뉴로 살려 둡니다.
+
+use super::*;
     use windows::Win32::UI::WindowsAndMessaging::{GetMenuItemCount, GetMenuItemID, GetSubMenu};
 
     #[test]

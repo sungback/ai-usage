@@ -1,5 +1,10 @@
 #![cfg_attr(not(windows), allow(dead_code))]
 
+//! 테마 렌더링 — 처음 보시는 분을 위한 안내.
+//!
+//! - 다듬어진 장면을 받아 글자·도형·이미지를 화면에 그립니다.
+//! - 이미지 캐시는 최대 64장까지만 들고, 넘치면 비우고 다시 읽습니다.
+
 use super::*;
 
 /// The automatic floating card owns its inset; it is not part of theme layout.

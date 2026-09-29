@@ -1,3 +1,7 @@
+//! 시스템 테마(다크·라이트) 감지 — 처음 보시는 분을 위한 안내.
+//!
+//! - Windows 레지스트리에서 밝은 모드 여부를 읽습니다. 그 외 OS에서는 기본값을 씁니다.
+
 #[cfg(windows)]
 use windows::core::PCWSTR;
 #[cfg(windows)]

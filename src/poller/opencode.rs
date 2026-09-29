@@ -1,3 +1,8 @@
+//! OpenCode Go 사용량 폴러 — 처음 보시는 분을 위한 안내.
+//!
+//! - 순서: 워크스페이스 ID·인증 쿠키 구하기 → 콘솔 상태 API 호출 → 구간별% 꺼내기.
+//! - 테스트용 가짜 서버는 최대 10초까지만 손님을 기다립니다 (무한 대기 금지).
+
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};

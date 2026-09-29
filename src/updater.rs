@@ -1,3 +1,8 @@
+//! 자동 업데이트 — 처음 보시는 분을 위한 안내.
+//!
+//! - GitHub Releases에서 새 버전을 확인하고, SHA-256 체크섬이 맞는 자산만 설치합니다.
+//! - 체크섬이 없으면 설치를 거부합니다(fail-closed). 태그와 Cargo 버전은 같아야 합니다.
+
 #![cfg_attr(not(windows), allow(dead_code))]
 
 use std::fs::File;

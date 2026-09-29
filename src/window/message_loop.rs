@@ -881,7 +881,12 @@ pub(super) unsafe extern "system" fn wnd_proc(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+//! Windows 메시지 루프 — 처음 보시는 분을 위한 안내.
+//!
+//! - 클릭·타이머·종료 같은 OS 소식을 받아 알맞은 동작(새로고침·이동·종료)으로 연결합니다.
+//! - 드래그 중 캡처를 놓을 때는 상태 스냅샷을 먼저 끝내야 재진입에 안전합니다.
+
+use super::*;
 
     #[test]
     fn tray_callbacks_return_while_state_is_locked_and_preserve_events() {

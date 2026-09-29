@@ -1,3 +1,12 @@
+//! 사용량 폴러 모음 — 처음 보시는 분을 위한 안내.
+//!
+//! - 각 AI 도구(Claude·Codex·Antigravity·OpenCode·Cursor)마다 아래 `mod` 하나가
+//!   "사용량을 가져오는 법"을 들고 있습니다.
+//! - 이 파일은 심부름꾼입니다. 켜진 공급자들을 최대 3개까지 동시에 물어보고,
+//!   결과를 하나로 모아 돌려줍니다.
+//! - 하나가 실패해도 나머지가 살아 있으면 성공으로 봅니다. 실패한 자리는
+//!   `carry_forward_failures`가 직전 값을 "오래된 값" 표시와 함께 살려 둡니다.
+
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -5,6 +14,7 @@ use crate::diagnose;
 use crate::models::{AppUsageData, UsageData, UsageSection};
 use crate::providers::{ProviderId, ProviderSet};
 
+/// 폴링이 실패한 이유입니다. 화면의 "로그인 필요·토큰 만료" 표시에 쓰입니다.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PollError {
@@ -17,6 +27,8 @@ pub enum PollError {
 }
 
 impl PollError {
+    /// 로그인·권한 문제인지 봅니다. 401·403도 여기로 봅니다.
+    /// [필수 주석: 인증 실패 분류 - 재시도해도 소용없어 로그인 유도가 먼저입니다]
     pub fn is_auth(self) -> bool {
         matches!(
             self,
@@ -30,6 +42,7 @@ impl PollError {
     }
 }
 
+/// 자격 증명 파일 감시 방식입니다. 지금 쓰는 파일만 볼지, 전부를 볼지 정합니다.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CredentialWatchMode {
     ActiveSource(ProviderId),
@@ -292,21 +305,22 @@ fn build_agent() -> Result<ureq::Agent, PollError> {
 
 type HttpResponse = ureq::http::Response<ureq::Body>;
 
-fn get_header_f64(response: &HttpResponse, name: &str) -> f64 {
+/// 응답 헤더를 문자열로 꺼냅니다. `get_header_f64`·`get_header_i64`의 공통 다리입니다.
+fn header_str<'a>(response: &'a HttpResponse, name: &str) -> Option<&'a str> {
     response
         .headers()
         .get(name)
         .and_then(|value| value.to_str().ok())
+}
+
+fn get_header_f64(response: &HttpResponse, name: &str) -> f64 {
+    header_str(response, name)
         .and_then(|s| s.parse::<f64>().ok())
         .unwrap_or(0.0)
 }
 
 fn get_header_i64(response: &HttpResponse, name: &str) -> Option<i64> {
-    response
-        .headers()
-        .get(name)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|s| s.parse::<i64>().ok())
+    header_str(response, name).and_then(|s| s.parse::<i64>().ok())
 }
 
 fn unix_to_system_time(unix_secs: Option<i64>) -> Option<SystemTime> {

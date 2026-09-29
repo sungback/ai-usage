@@ -1,3 +1,9 @@
+//! Cursor 사용량 폴러 — 처음 보시는 분을 위한 안내.
+//!
+//! - 순서: 세션 쿠키 구하기 → `usage-summary` API 호출 → 자동%·API% 꺼내기.
+//! - 쿠키는 환경변수(`CURSOR_SESSION_TOKEN`)가 우선, 없으면 Cursor의
+//!   로컬 DB(`state.vscdb`)에서 읽습니다. 비밀은 저장하지 않고 지문만 봅니다.
+
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};

@@ -1,3 +1,10 @@
+//! Antigravity 사용량 폴러 — 처음 보시는 분을 위한 안내.
+//!
+//! - 순서: 키체인·자격 증명 저장소에서 토큰 읽기 → 필요하면 OAuth 갱신 →
+//!   쿼터 API 호출 → Gemini·서드파티 구간 꺼내기.
+//! - OAuth 클라이언트 값은 저장소에 올리지 않고 이 머신의 Antigravity 설치본에서
+//!   읽습니다. 자세한 사유는 아래 `CONFIGURED_CLIENT_ID` 주석에 있습니다.
+
 use std::collections::HashMap;
 #[cfg(windows)]
 use std::ffi::c_void;

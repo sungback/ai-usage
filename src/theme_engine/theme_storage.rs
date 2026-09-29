@@ -1,3 +1,8 @@
+//! 테마 파일 보관함 — 처음 보시는 분을 위한 안내.
+//!
+//! - 테마는 설정 폴더 아래 `themes`에, 그림 파일은 `themes/assets`에 둡니다.
+//! - `assets/` 밖을 가리키는 그림 경로는 테스트에서 걸러냅니다.
+
 use super::*;
 
 pub fn themes_directory() -> PathBuf {

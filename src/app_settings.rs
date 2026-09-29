@@ -1,3 +1,8 @@
+//! 설정 파일 보관함 — 처음 보시는 분을 위한 안내.
+//!
+//! - 설정은 원자적으로 저장(임시 파일→교체)해 꺼지다 말아도 깨지지 않습니다.
+//! - 망가진 파일은 `settings.json.corrupt-*`로 대기시켜 두고 기본값으로 시작합니다.
+//!
 //! Shared, atomically persisted state used by the monitor process.
 
 use std::path::{Path, PathBuf};

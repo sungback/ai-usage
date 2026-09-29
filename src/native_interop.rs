@@ -1,3 +1,8 @@
+//! Windows OS와 주고받는 작은 통로 — 처음 보시는 분을 위한 안내.
+//!
+//! - 창 스타일·타이머 번호 같은 고정 숫자들을 한곳에 모아 둡니다.
+//! - macOS 빌드에서는 쉬는 파일이라 경고를 꺼 둡니다.
+
 #![cfg_attr(not(windows), allow(dead_code))]
 
 // Window style constants

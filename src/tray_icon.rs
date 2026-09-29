@@ -1,3 +1,8 @@
+//! Windows 트레이 아이콘 저수준 제어 — 처음 보시는 분을 위한 안내.
+//!
+//! - 알림 영역에 아이콘을 달고, 말풍선·클릭 소식을 주고받습니다.
+//! - Windows 전용이라 다른 OS 빌드에서는 빠집니다.
+
 use std::sync::Mutex;
 
 use windows::core::PCWSTR;

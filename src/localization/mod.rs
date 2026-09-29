@@ -1,3 +1,11 @@
+//! 한국어 문구 창고 — 처음 보시는 분을 위한 안내.
+//!
+//! - 앱 말풍선은 전부 여기서 나옵니다. Rust 코드를 고치지 않고
+//!   `src/localization/locales/ko.toml`만 고치면 문구가 바뀝니다.
+//! - `build.rs`가 TOML을 읽어 이 파일의 `generated` 표를 자동 생성합니다.
+//! - 언어는 한국어가 유일합니다. `from_code`가 `ko`가 아니면 `None`을 돌려
+//!   한국어로 떨어지게 했습니다 (옛 설정 파일 호환용).
+
 // Keep the complete translation catalogue while the menu bar UI progressively
 // adopts the legacy widget strings.
 
@@ -11,6 +19,8 @@ use windows::Win32::Globalization::{
 
 use crate::providers::ProviderId;
 
+/// 언어 번호표입니다. 지금은 한국어(`0번`) 하나뿐입니다.
+/// 나중에 언어가 늘면 숫자만 늘어납니다.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LanguageId(usize);
 
@@ -49,10 +59,8 @@ impl LanguageId {
         self.locale().strings
     }
 
-    /// Translate user-interface text.
-    ///
-    /// The key is the canonical text in `ko.toml`, kept untranslated on purpose so a
-    /// term awaiting review still renders as readable Korean rather than nothing.
+    /// 화면 문구를 꺼냅니다. 못 찾으면 열쇠 그대로를 돌려줘 빈칸이 안 생깁니다.
+    /// [필수 주석: 번역 누락 폴백 - 없는 키는 키 자체를 보여줘 앱이 멈추지 않습니다]
     pub fn text(self, key: &'static str) -> &'static str {
         let locale = self.locale();
         locale
@@ -151,8 +159,25 @@ pub struct Strings {
     pub cursor_token_expired_body: &'static str,
 }
 
+/// 저장된 언어 지정이 있으면 따르고, 없으면 OS 언어를 봅니다.
 pub fn resolve_language(language_override: Option<LanguageId>) -> LanguageId {
     language_override.unwrap_or_else(detect_system_language)
+}
+
+/// 환경변수(`LC_ALL` → `LC_MESSAGES` → `LANG` 순)에서 언어를 찾습니다.
+/// `ko_KR.UTF-8`처럼 뒤에 붙은 인코딩은 떼고 봅니다.
+/// Windows는 OS API로 언어를 봐서 이 함수는 비-Windows 전용입니다.
+#[cfg(not(windows))]
+fn language_from_env() -> Option<LanguageId> {
+    for var in ["LC_ALL", "LC_MESSAGES", "LANG"] {
+        if let Ok(val) = std::env::var(var) {
+            let code = val.split('.').next().unwrap_or(&val);
+            if let Some(lang) = LanguageId::from_code(code) {
+                return Some(lang);
+            }
+        }
+    }
+    None
 }
 
 pub fn detect_system_language() -> LanguageId {
@@ -171,15 +196,7 @@ pub fn detect_system_language() -> LanguageId {
         if let Some(lang) = detect_macos_language() {
             return lang;
         }
-        for var in ["LC_ALL", "LC_MESSAGES", "LANG"] {
-            if let Ok(val) = std::env::var(var) {
-                let code = val.split('.').next().unwrap_or(&val);
-                if let Some(lang) = LanguageId::from_code(code) {
-                    return lang;
-                }
-            }
-        }
-        LanguageId::Korean
+        language_from_env().unwrap_or(LanguageId::Korean)
     }
 }
 

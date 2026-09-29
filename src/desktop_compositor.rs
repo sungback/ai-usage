@@ -1,3 +1,8 @@
+//! Windows 화면 합성기(DirectComposition) — 처음 보시는 분을 위한 안내.
+//!
+//! - 반투명·레이어드 위젯을 화면에 합성하는 무거운 일꾼입니다.
+//! - Windows 전용이라 다른 OS 빌드에서는 빠집니다.
+
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::c_void;

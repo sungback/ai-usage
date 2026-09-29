@@ -1,5 +1,11 @@
 #![cfg_attr(not(windows), allow(dead_code))]
 
+//! 테마 엔진 — 처음 보시는 분을 위한 안내.
+//!
+//! - 테마 파일(JSON)이 망가져도 앱이 죽지 않고 기본 화면으로 살아납니다.
+//! - 렌더러는 저장된 구조체가 아니라 여기서 다듬은 "장면"만 봅니다.
+//!   그래서 이상한 입력도 복구하고, 파일도 기기·버전을 옮겨 다닙니다.
+//!
 //! Versioned custom theme documents, expression evaluation, and live data binding.
 //!
 //! The renderer deliberately consumes this module's resolved scene rather than the

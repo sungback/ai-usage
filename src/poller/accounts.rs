@@ -269,7 +269,12 @@ pub(super) fn carry_accounts(fresh: &mut AppUsageData, previous: &AppUsageData) 
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+//! 여러 계정을 쓰는 공급자의 폴러 — 처음 보시는 분을 위한 안내.
+//!
+//! - 켜진 명함(프로필)마다 토큰 파일 자리를 계산해 각 공급자 폴러에 넘깁니다.
+//! - 하나가 실패해도 나머지는 계속 묻고, 직전 값은 "오래된 값"으로 살려 둡니다.
+
+use super::*;
     use crate::accounts::file_signature;
     use crate::accounts::ProviderAccounts;
     use std::sync::atomic::{AtomicUsize, Ordering};
