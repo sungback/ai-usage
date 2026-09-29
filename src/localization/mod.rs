@@ -1,6 +1,5 @@
 // Keep the complete translation catalogue while the menu bar UI progressively
 // adopts the legacy widget strings.
-#![allow(dead_code)]
 
 #[cfg(windows)]
 use windows::core::PWSTR;
@@ -17,8 +16,10 @@ pub struct LanguageId(usize);
 
 struct Locale {
     code: &'static str,
+    #[allow(dead_code)]
     native_name: &'static str,
     locale_patterns: &'static [&'static str],
+    #[allow(dead_code)]
     windows_font: Option<(&'static str, &'static str)>,
     strings: Strings,
     translations: &'static [(&'static str, &'static str)],
@@ -44,10 +45,6 @@ impl LanguageId {
         self.locale().code
     }
 
-    pub fn native_name(self) -> &'static str {
-        self.locale().native_name
-    }
-
     pub fn strings(self) -> Strings {
         self.locale().strings
     }
@@ -65,6 +62,7 @@ impl LanguageId {
             .unwrap_or(key)
     }
 
+    #[cfg_attr(not(windows), allow(dead_code))]
     pub fn provider_auth_error(self, provider: ProviderId) -> (&'static str, &'static str) {
         let strings = self.strings();
         match provider {
@@ -103,43 +101,35 @@ impl LanguageId {
             })
         })
     }
-
-    pub(crate) fn windows_font(self) -> Option<(&'static str, &'static str)> {
-        self.locale().windows_font
-    }
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct Strings {
     pub window_title: &'static str,
-    pub refresh: &'static str,
-    pub update_frequency: &'static str,
-    pub one_minute: &'static str,
-    pub five_minutes: &'static str,
-    pub fifteen_minutes: &'static str,
-    pub one_hour: &'static str,
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub models: &'static str,
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub claude_code_model: &'static str,
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub codex_model: &'static str,
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub antigravity_model: &'static str,
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub opencode_model: &'static str,
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub cursor_model: &'static str,
-    pub settings: &'static str,
-    pub start_with_windows: &'static str,
-    pub language: &'static str,
-    pub system_default: &'static str,
-    pub check_for_updates: &'static str,
-    pub checking_for_updates: &'static str,
+    #[cfg_attr(not(windows), allow(dead_code))]
     pub updates: &'static str,
+    #[cfg_attr(not(windows), allow(dead_code))]
     pub update_in_progress: &'static str,
+    #[cfg_attr(not(windows), allow(dead_code))]
     pub up_to_date: &'static str,
-    pub up_to_date_short: &'static str,
+    #[cfg_attr(not(windows), allow(dead_code))]
     pub update_failed: &'static str,
-    pub applying_update: &'static str,
-    pub update_to: &'static str,
+    #[cfg_attr(not(windows), allow(dead_code))]
     pub update_available: &'static str,
+    #[cfg_attr(not(windows), allow(dead_code))]
     pub update_prompt_now: &'static str,
-    pub exit: &'static str,
     pub session_window: &'static str,
     pub weekly_window: &'static str,
     pub cursor_auto_window: &'static str,
@@ -159,10 +149,6 @@ pub struct Strings {
     pub opencode_token_expired_body: &'static str,
     pub cursor_token_expired_title: &'static str,
     pub cursor_token_expired_body: &'static str,
-    pub codex_window_title: &'static str,
-    pub antigravity_window_title: &'static str,
-    pub opencode_window_title: &'static str,
-    pub cursor_window_title: &'static str,
 }
 
 pub fn resolve_language(language_override: Option<LanguageId>) -> LanguageId {

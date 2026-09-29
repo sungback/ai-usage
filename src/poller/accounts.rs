@@ -239,6 +239,7 @@ fn source_key(path: &Result<Option<PathBuf>, String>) -> String {
     }
 }
 
+#[cfg_attr(not(any(windows, test)), allow(dead_code))]
 pub(super) fn carry_accounts(fresh: &mut AppUsageData, previous: &AppUsageData) {
     for account in &mut fresh.accounts {
         if account.usage.is_some() {

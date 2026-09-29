@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -26,6 +24,7 @@ impl PollError {
         )
     }
 
+    #[cfg_attr(not(any(windows, test)), allow(dead_code))]
     pub fn is_transient(self) -> bool {
         matches!(self, Self::RequestFailed | Self::HttpStatus(_)) && !self.is_auth()
     }
@@ -34,6 +33,7 @@ impl PollError {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CredentialWatchMode {
     ActiveSource(ProviderId),
+    #[cfg_attr(not(windows), allow(dead_code))]
     AllSources(ProviderId),
 }
 
@@ -75,6 +75,7 @@ pub fn poll(
 /// provider's outage blanks its row on every refresh while the others carry
 /// on updating. The carried figures are marked stale rather than passed off as
 /// current.
+#[cfg_attr(not(any(windows, test)), allow(dead_code))]
 pub fn carry_forward_failures(
     fresh: AppUsageData,
     previous: &AppUsageData,
@@ -436,12 +437,14 @@ fn is_leap(y: u64) -> bool {
 }
 
 /// Calculate how long until the display text would change
+#[cfg_attr(not(windows), allow(dead_code))]
 pub fn time_until_display_change(resets_at: Option<SystemTime>) -> Option<Duration> {
     let reset = resets_at?;
     let remaining = reset.duration_since(SystemTime::now()).ok()?;
     Some(time_until_display_change_from_secs(remaining.as_secs()))
 }
 
+#[cfg_attr(not(windows), allow(dead_code))]
 fn time_until_display_change_from_secs(total_secs: u64) -> Duration {
     let total_mins = total_secs / 60;
     let total_hours = total_secs / 3600;
@@ -461,6 +464,7 @@ fn time_until_display_change_from_secs(total_secs: u64) -> Duration {
 }
 
 /// Returns true if either section has reached "now" (reset time has passed).
+#[cfg_attr(not(any(windows, test)), allow(dead_code))]
 pub fn is_past_reset(data: &UsageData) -> bool {
     if data.stale {
         return false;
@@ -470,6 +474,7 @@ pub fn is_past_reset(data: &UsageData) -> bool {
     past(&data.session) || past(&data.weekly)
 }
 
+#[cfg_attr(not(any(windows, test)), allow(dead_code))]
 pub fn app_is_past_reset(data: &AppUsageData) -> bool {
     data.all_usage().any(is_past_reset)
 }

@@ -166,6 +166,7 @@ impl AppUsageData {
             .map(|(provider, usage)| (*provider, usage))
     }
 
+    #[cfg_attr(not(windows), allow(dead_code))]
     pub fn all_usage(&self) -> impl Iterator<Item = &UsageData> {
         self.providers.values().chain(
             self.accounts

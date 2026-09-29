@@ -29,6 +29,7 @@ struct AntigravityTokenData {
     #[serde(default)]
     refresh_token: Option<String>,
     #[serde(default)]
+    #[cfg_attr(not(test), allow(dead_code))]
     expiry: Option<String>,
     #[serde(default)]
     id_token: Option<String>,

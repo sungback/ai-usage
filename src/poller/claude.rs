@@ -634,6 +634,7 @@ fn resolve_windows_claude_path() -> String {
 /// The desktop app ships its own Claude Code build under
 /// `%APPDATA%\Claude\claude-code\<version>\claude.exe`, which is the only
 /// Claude binary present when the standalone CLI was never installed.
+#[cfg_attr(not(windows), allow(dead_code))]
 fn bundled_desktop_claude_path() -> Option<PathBuf> {
     let versions = dirs::config_dir()?.join("Claude").join("claude-code");
     let mut candidates: Vec<PathBuf> = std::fs::read_dir(versions)
@@ -651,6 +652,7 @@ fn bundled_desktop_claude_path() -> Option<PathBuf> {
     candidates.pop()
 }
 
+#[cfg_attr(not(any(windows, test)), allow(dead_code))]
 fn bundled_claude_version(path: &Path) -> Option<Vec<u64>> {
     path.parent()?
         .file_name()?
