@@ -11,7 +11,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Deserialize;
 
 use super::{build_agent, parse_iso8601, PollError};
-use crate::diagnose;
 use crate::models::{UsageData, UsageSection};
 
 const GO_STATUS_URL: &str = "https://opencode.ai/console/api/go/status";
@@ -86,10 +85,7 @@ struct GoMeter {
 }
 
 pub(super) fn poll_opencode() -> Result<UsageData, PollError> {
-    let credentials = read_dashboard_credentials().ok_or_else(|| {
-        diagnose::log("OpenCode usage poll failed: no dashboard credentials found");
-        PollError::NoCredentials
-    })?;
+    let credentials = read_dashboard_credentials().ok_or(PollError::NoCredentials)?;
     poll_dashboard(&credentials)
 }
 
@@ -98,18 +94,9 @@ pub(super) fn credential_watch_snapshot(_all_sources: bool) -> Vec<String> {
 }
 
 fn poll_dashboard(credentials: &DashboardCredentials) -> Result<UsageData, PollError> {
-    let usage = fetch_dashboard_usage(credentials).inspect_err(|error| {
-        diagnose::log(format!(
-            "OpenCode dashboard poll failed via {}: {error:?}",
-            credentials.source
-        ));
-    })?;
+    let usage = fetch_dashboard_usage(credentials)?;
 
     if usage.rolling.is_none() && usage.weekly.is_none() && usage.monthly.is_none() {
-        diagnose::log(format!(
-            "OpenCode dashboard returned no usage windows from {}",
-            credentials.source
-        ));
         return Err(PollError::RequestFailed);
     }
 
@@ -215,8 +202,7 @@ fn fetch_go_status(
     {
         Ok(response) => response,
         Err(ureq::Error::StatusCode(401 | 403)) => return Err(PollError::AuthRequired),
-        Err(error) => {
-            diagnose::log_error("OpenCode Go status request failed", error);
+        Err(_) => {
             return Err(PollError::RequestFailed);
         }
     };
@@ -224,18 +210,12 @@ fn fetch_go_status(
     let status = response
         .body_mut()
         .read_json::<Option<GoStatus>>()
-        .map_err(|error| {
-            diagnose::log_error("OpenCode Go status response is not valid JSON", error);
-            PollError::RequestFailed
-        })?;
+        .map_err(|_| PollError::RequestFailed)?;
     usage_from_status(status)
 }
 
 fn usage_from_status(status: Option<GoStatus>) -> Result<DashboardUsage, PollError> {
-    let access = status.and_then(|status| status.access).ok_or_else(|| {
-        diagnose::log("OpenCode Go status returned no active subscription access");
-        PollError::RequestFailed
-    })?;
+    let access = status.and_then(|status| status.access).ok_or(PollError::RequestFailed)?;
     Ok(DashboardUsage {
         rolling: Some(window_from_meter(
             &access.meters.five_hour.meter,
@@ -253,21 +233,10 @@ fn usage_from_status(status: Option<GoStatus>) -> Result<DashboardUsage, PollErr
 }
 
 fn window_from_meter(meter: &GoMeter, resets_at: Option<&str>) -> Result<UsageWindow, PollError> {
-    let limit = meter.limit_micro_cents.parse::<u128>().map_err(|_| {
-        diagnose::log("OpenCode Go status contains an invalid usage limit");
-        PollError::RequestFailed
-    })?;
-    let used = meter.used_micro_cents.parse::<u128>().map_err(|_| {
-        diagnose::log("OpenCode Go status contains an invalid usage amount");
-        PollError::RequestFailed
-    })?;
+    let limit = meter.limit_micro_cents.parse::<u128>().map_err(|_| PollError::RequestFailed)?;
+    let used = meter.used_micro_cents.parse::<u128>().map_err(|_| PollError::RequestFailed)?;
     let resets_at = resets_at
-        .map(|value| {
-            parse_iso8601(Some(value)).ok_or_else(|| {
-                diagnose::log("OpenCode Go status contains an invalid reset time");
-                PollError::RequestFailed
-            })
-        })
+        .map(|value| parse_iso8601(Some(value)).ok_or(PollError::RequestFailed))
         .transpose()?;
     Ok(UsageWindow {
         usage_percent: if limit == 0 {

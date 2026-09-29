@@ -71,7 +71,6 @@ pub(super) fn position_at_taskbar() {
         let taskbar_hwnd = match s.taskbar_hwnd {
             Some(h) => h.to_hwnd(),
             None => {
-                diagnose::log("position_at_taskbar skipped: no taskbar handle");
                 return;
             }
         };
@@ -82,7 +81,6 @@ pub(super) fn position_at_taskbar() {
     let taskbar_rect = match native_interop::get_taskbar_rect(taskbar_hwnd) {
         Some(r) => r,
         None => {
-            diagnose::log("position_at_taskbar skipped: unable to query taskbar rect");
             return;
         }
     };
@@ -124,17 +122,10 @@ pub(super) fn position_at_taskbar() {
         // Child window: coordinates relative to parent (taskbar)
         let x = tray_left - taskbar_rect.left - widget_width - tray_offset;
         native_interop::move_window(hwnd, x, y - taskbar_rect.top, widget_width, widget_height);
-        diagnose::log(format!(
-            "positioned embedded widget at x={x} y={} w={widget_width} h={widget_height}",
-            y - taskbar_rect.top
-        ));
     } else {
         // Topmost popup: screen coordinates
         let x = tray_left - widget_width - tray_offset;
         native_interop::move_window(hwnd, x, y, widget_width, widget_height);
-        diagnose::log(format!(
-            "positioned fallback widget at x={x} y={y} w={widget_width} h={widget_height}"
-        ));
     }
 }
 
@@ -148,12 +139,7 @@ pub(super) fn ensure_layered_window(hwnd: HWND) {
 }
 
 pub(super) fn render_desktop_custom_window(hwnd: HWND, rendered: &theme_engine::RenderedTheme) {
-    if let Err(error) = crate::desktop_compositor::present(hwnd, rendered) {
-        diagnose::log(format!(
-            "desktop theme render failed hwnd={:?} size={}x{} error={error}",
-            hwnd, rendered.width, rendered.height
-        ));
-    }
+    let _ = crate::desktop_compositor::present(hwnd, rendered);
 }
 
 pub(super) fn render_custom_window(
@@ -221,7 +207,7 @@ pub(super) fn render_custom_window(
             SourceConstantAlpha: 255,
             AlphaFormat: AC_SRC_ALPHA as u8,
         };
-        if let Err(error) = UpdateLayeredWindow(
+        let _ = UpdateLayeredWindow(
             hwnd,
             Some(screen_dc),
             None,
@@ -231,12 +217,7 @@ pub(super) fn render_custom_window(
             COLORREF(0),
             Some(&blend),
             ULW_ALPHA,
-        ) {
-            diagnose::log(format!(
-                "custom theme render failed hwnd={:?} size={}x{} error={error}",
-                hwnd, width, height
-            ));
-        }
+        );
         SelectObject(memory_dc, old);
         let _ = DeleteObject(bitmap.into());
         let _ = DeleteDC(memory_dc);

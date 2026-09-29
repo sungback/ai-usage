@@ -81,7 +81,6 @@ impl MacOsMonitorApp {
                 if let Some(prev) = self.last_settings_mtime {
                     if prev != mtime {
                         self.last_settings_mtime = Some(mtime);
-                        crate::diagnose::log("settings.json modified externally, updating menu bar");
                         self.update_tray();
                         let _ = self.refresh_sender.send(());
                     }
@@ -100,7 +99,6 @@ impl MacOsMonitorApp {
                 if let Some(prev) = self.last_refresh_trigger_mtime {
                     if prev != mtime {
                         self.last_refresh_trigger_mtime = Some(mtime);
-                        crate::diagnose::log("refresh.trigger touched, immediately polling usage");
                         let _ = self.refresh_sender.send(());
                     }
                 } else {
@@ -115,7 +113,6 @@ impl MacOsMonitorApp {
         let trigger = crate::app_settings::app_data_directory().join("update_check.trigger");
         if std::fs::metadata(&trigger).is_ok() {
             let _ = std::fs::remove_file(&trigger);
-            crate::diagnose::log("update_check.trigger touched, checking for updates");
             let proxy = self.event_proxy.clone();
             std::thread::spawn(move || {
                 let release = match crate::updater::check_for_updates() {
@@ -133,10 +130,6 @@ impl MacOsMonitorApp {
         if std::fs::metadata(&trigger).is_ok() {
             let _ = std::fs::remove_file(&trigger);
             if let Some(release) = &self.available_update {
-                crate::diagnose::log(format!(
-                    "update_apply.trigger touched, applying update {}",
-                    release.latest_version
-                ));
                 if crate::updater::begin_self_update(release).is_ok() {
                     event_loop.exit();
                 }
@@ -254,14 +247,11 @@ impl ApplicationHandler<UserEvent> for MacOsMonitorApp {
 // ── 진입점 ────────────────────────────────────────────────────────────────
 
 pub fn run() {
-    crate::diagnose::log("macOS Menu Bar runner starting");
-
     let (refresh_tx, refresh_rx) = mpsc::channel::<()>();
 
     let event_loop = match EventLoop::<UserEvent>::with_user_event().build() {
         Ok(el) => el,
-        Err(err) => {
-            crate::diagnose::log(format!("Failed to create event loop: {err}"));
+        Err(_) => {
             return;
         }
     };
@@ -288,13 +278,7 @@ pub fn run() {
         .with_icon(initial_badge)
         .with_icon_as_template(false);
 
-    let tray = match builder.build() {
-        Ok(t) => Some(t),
-        Err(err) => {
-            crate::diagnose::log(format!("Failed to create tray icon: {err}"));
-            None
-        }
-    };
+    let tray = builder.build().ok();
 
     // 폴링 스레드
     let poll_proxy = proxy.clone();
@@ -322,8 +306,7 @@ pub fn run() {
                         let _ = poll_proxy.send_event(UserEvent::UsageUpdated(Box::new(data)));
                         last_poll = Instant::now();
                     }
-                    Err(err) => {
-                        crate::diagnose::log(format!("macOS poller::poll failed: {err:?}"));
+                    Err(_) => {
                         consecutive_failures = consecutive_failures.saturating_add(1);
                         let backoff = Duration::from_millis(u64::from(
                             crate::poller::poll_retry_backoff_ms(
@@ -346,10 +329,6 @@ pub fn run() {
             if let Ok(crate::updater::UpdateCheckResult::Available(release)) =
                 crate::updater::check_for_updates()
             {
-                crate::diagnose::log(format!(
-                    "macOS update found: {}",
-                    release.latest_version
-                ));
                 let _ = update_proxy.send_event(UserEvent::UpdateChecked(Some(release)));
             }
             std::thread::sleep(Duration::from_secs(

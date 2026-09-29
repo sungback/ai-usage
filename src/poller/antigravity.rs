@@ -15,7 +15,6 @@ use std::sync::Mutex;
 use serde::Deserialize;
 
 use super::{build_agent, parse_iso8601, PollError};
-use crate::diagnose;
 use crate::models::{UsageData, UsageSection};
 
 const ANTIGRAVITY_CREDENTIAL_TARGET: &str = "gemini:antigravity";
@@ -146,10 +145,6 @@ fn find_client_secret_on_disk(client_id: &str) -> Option<String> {
             continue;
         };
         if let Some(secret) = extract_client_secret(&bytes, client_id) {
-            diagnose::log(format!(
-                "Antigravity OAuth client read from {}",
-                path.display()
-            ));
             return Some(secret);
         }
     }
@@ -312,10 +307,6 @@ fn refresh_antigravity_token(refresh_token: &str, id_token: Option<&str>) -> Res
     let agent = build_agent()?;
     let client_id = oauth_client_id(id_token);
     let Some(client_secret) = oauth_client_secret(&client_id) else {
-        diagnose::log(
-            "Antigravity OAuth client secret unavailable: no ANTIGRAVITY_CLIENT_SECRET override \
-             and no client found in the local Antigravity installation",
-        );
         return Err(PollError::AuthRequired);
     };
     let payload = format!(
@@ -329,8 +320,7 @@ fn refresh_antigravity_token(refresh_token: &str, id_token: Option<&str>) -> Res
         .send(payload.as_bytes())
     {
         Ok(resp) => resp,
-        Err(e) => {
-            diagnose::log_error("Antigravity OAuth refresh token request failed", e);
+        Err(_) => {
             return Err(PollError::AuthRequired);
         }
     };
@@ -342,8 +332,7 @@ fn refresh_antigravity_token(refresh_token: &str, id_token: Option<&str>) -> Res
 
     let token_resp: RefreshResponse = match resp.body_mut().read_json() {
         Ok(res) => res,
-        Err(e) => {
-            diagnose::log_error("unable to parse Antigravity refresh response", e);
+        Err(_) => {
             return Err(PollError::AuthRequired);
         }
     };
@@ -352,15 +341,6 @@ fn refresh_antigravity_token(refresh_token: &str, id_token: Option<&str>) -> Res
         return Err(PollError::AuthRequired);
     }
 
-    let account = id_token
-        .and_then(|token| jwt_claim(token, "email"))
-        .or_else(|| id_token.and_then(|token| jwt_claim(token, "sub")));
-    match account {
-        Some(account) => diagnose::log(format!(
-            "Antigravity access token refreshed via OAuth2 for account {account}"
-        )),
-        None => diagnose::log("Antigravity access token successfully refreshed via OAuth2"),
-    }
     Ok(token_resp.access_token)
 }
 
@@ -375,7 +355,6 @@ pub(super) fn poll_antigravity() -> Result<UsageData, PollError> {
     let creds = match read_antigravity_credentials() {
         Some(creds) => creds,
         None => {
-            diagnose::log("Antigravity usage poll failed: no Antigravity credentials found");
             return Err(PollError::NoCredentials);
         }
     };
@@ -403,7 +382,6 @@ pub(super) fn poll_antigravity() -> Result<UsageData, PollError> {
         match fetch_antigravity_usage(&token) {
             Ok(data) => return Ok(data),
             Err(PollError::AuthRequired) => {
-                diagnose::log("Cached Antigravity access token expired, invalidating cache...");
                 let mut lock = CACHED_ACCESS_TOKEN
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -418,7 +396,6 @@ pub(super) fn poll_antigravity() -> Result<UsageData, PollError> {
         Ok(data) => Ok(data),
         Err(PollError::AuthRequired) => {
             if let Some(ref rf) = creds.refresh_token {
-                diagnose::log("Antigravity token auth required, attempting OAuth refresh...");
                 let new_token = refresh_antigravity_token(rf, creds.id_token.as_deref())?;
                 // Cache the fresh token in memory so subsequent polls use it directly
                 {
@@ -504,9 +481,7 @@ pub(super) fn fetch_antigravity_usage_from_endpoint(
         match fetch_antigravity_quota_summary(base_url, token, project) {
             Ok(data) => return Ok(data),
             Err(PollError::AuthRequired) => return Err(PollError::AuthRequired),
-            Err(error) => diagnose::log(format!(
-                "Antigravity retrieveUserQuotaSummary failed, falling back to model quota: {error:?}"
-            )),
+            Err(_) => {}
         }
     }
 
@@ -543,21 +518,16 @@ pub(super) fn fetch_antigravity_project(
     {
         Ok(resp) => resp,
         Err(ureq::Error::StatusCode(code)) if code == 401 || code == 403 => {
-            diagnose::log(format!(
-                "Antigravity loadCodeAssist returned auth error status {code}"
-            ));
             return Err(PollError::AuthRequired);
         }
-        Err(error) => {
-            diagnose::log_error("Antigravity loadCodeAssist request failed", error);
+        Err(_) => {
             return Err(PollError::RequestFailed);
         }
     };
 
     let response: AntigravityLoadResponse = match resp.body_mut().read_json() {
         Ok(response) => response,
-        Err(error) => {
-            diagnose::log_error("unable to parse Antigravity loadCodeAssist response", error);
+        Err(_) => {
             return Err(PollError::RequestFailed);
         }
     };
@@ -585,24 +555,16 @@ pub(super) fn fetch_antigravity_model_quota(
     {
         Ok(resp) => resp,
         Err(ureq::Error::StatusCode(code)) if code == 401 || code == 403 => {
-            diagnose::log(format!(
-                "Antigravity fetchAvailableModels returned auth error status {code}"
-            ));
             return Err(PollError::AuthRequired);
         }
-        Err(error) => {
-            diagnose::log_error("Antigravity fetchAvailableModels request failed", error);
+        Err(_) => {
             return Err(PollError::RequestFailed);
         }
     };
 
     let response: AntigravityModelsResponse = match resp.body_mut().read_json() {
         Ok(response) => response,
-        Err(error) => {
-            diagnose::log_error(
-                "unable to parse Antigravity fetchAvailableModels response",
-                error,
-            );
+        Err(_) => {
             return Err(PollError::RequestFailed);
         }
     };
@@ -636,19 +598,14 @@ pub(super) fn fetch_antigravity_quota_summary(
         Err(ureq::Error::StatusCode(code)) if code == 401 || code == 403 => {
             return Err(PollError::AuthRequired);
         }
-        Err(error) => {
-            diagnose::log_error("Antigravity retrieveUserQuotaSummary request failed", error);
+        Err(_) => {
             return Err(PollError::RequestFailed);
         }
     };
 
     let response: AntigravityQuotaSummaryResponse = match resp.body_mut().read_json() {
         Ok(response) => response,
-        Err(error) => {
-            diagnose::log_error(
-                "unable to parse Antigravity retrieveUserQuotaSummary response",
-                error,
-            );
+        Err(_) => {
             return Err(PollError::RequestFailed);
         }
     };
@@ -861,9 +818,6 @@ fn read_windows_generic_credential(target: &str) -> Option<String> {
     let mut credential: *mut CredentialW = std::ptr::null_mut();
     let ok = unsafe { CredReadW(target_wide.as_ptr(), CRED_TYPE_GENERIC, 0, &mut credential) };
     if ok == 0 || credential.is_null() {
-        diagnose::log(format!(
-            "unable to read Windows generic credential target {target}"
-        ));
         return None;
     }
 

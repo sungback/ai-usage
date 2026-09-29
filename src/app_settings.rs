@@ -372,13 +372,7 @@ pub fn load_settings() -> SettingsFile {
             }
         },
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => SettingsFile::default(),
-        Err(error) => {
-            crate::diagnose::log(format!(
-                "unable to read settings from {}: {error}",
-                path.display()
-            ));
-            SettingsFile::default()
-        }
+        Err(_) => SettingsFile::default(),
     };
     settings.normalize();
     settings
@@ -397,18 +391,7 @@ fn quarantine_unreadable_settings(path: &Path) {
         .and_then(|name| name.to_str())
         .unwrap_or("settings.json");
     let quarantined = path.with_file_name(format!("{file_name}.corrupt-{stamp}"));
-    match std::fs::rename(path, &quarantined) {
-        Ok(()) => crate::diagnose::log(format!(
-            "settings at {} could not be parsed and were moved aside to {}",
-            path.display(),
-            quarantined.display()
-        )),
-        Err(error) => crate::diagnose::log(format!(
-            "settings at {} could not be parsed and could not be moved aside ({error}); \
-             starting from defaults, and the next save will overwrite that file",
-            path.display()
-        )),
-    }
+    let _ = std::fs::rename(path, &quarantined);
 }
 
 pub fn save_settings(settings: &SettingsFile) -> Result<(), String> {

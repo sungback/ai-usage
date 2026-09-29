@@ -31,7 +31,6 @@ use crate::app_settings::{
     POLL_1_MIN_SECONDS, POLL_5_MIN, POLL_5_MIN_SECONDS,
 };
 use crate::context_menu::{self, ContextMenuAction, ContextMenuItem, ContextMenuItemKind};
-use crate::diagnose;
 use crate::localization::{self, LanguageId, Strings};
 use crate::models::AppUsageData;
 use crate::native_interop::{
@@ -195,14 +194,14 @@ const WM_APP_UPDATE_CHECK_COMPLETE: u32 = WM_APP + 2;
 const TRAY_ICON_UPDATE_REPOSITION_SUPPRESS_MS: u64 = 750;
 const WINDOW_STATE_INTERVAL_MS: u32 = 250;
 
-fn open_web_url(hwnd: HWND, url: &str, failure_message: &'static str) {
+fn open_web_url(hwnd: HWND, url: &str) {
     if !theme_engine::supported_url(url) {
         return;
     }
     unsafe {
         let operation = native_interop::wide_str("open");
         let url = native_interop::wide_str(url.trim());
-        let result = ShellExecuteW(
+        let _ = ShellExecuteW(
             Some(hwnd),
             PCWSTR::from_raw(operation.as_ptr()),
             PCWSTR::from_raw(url.as_ptr()),
@@ -210,9 +209,6 @@ fn open_web_url(hwnd: HWND, url: &str, failure_message: &'static str) {
             PCWSTR::null(),
             SW_SHOWNORMAL,
         );
-        if result.0 as isize <= 32 {
-            diagnose::log(failure_message);
-        }
     }
 }
 
@@ -352,14 +348,12 @@ fn relaunch_self() {
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(0);
     if last != 0 && now.saturating_sub(last) < RELAUNCH_THROTTLE_SECS {
-        diagnose::log("relaunch storm detected; backing off before relaunching");
         std::thread::sleep(Duration::from_secs(RELAUNCH_BACKOFF_SECS));
     }
 
     let exe = match std::env::current_exe() {
         Ok(exe) => exe,
-        Err(error) => {
-            diagnose::log_error("watchdog: unable to resolve current executable", error);
+        Err(_) => {
             return;
         }
     };
@@ -372,11 +366,9 @@ fn relaunch_self() {
         .spawn()
     {
         Ok(_) => {
-            diagnose::log("watchdog: relaunched fresh instance, exiting old one");
             std::process::exit(0);
         }
-        Err(error) => {
-            diagnose::log_error("watchdog: unable to spawn relaunched instance", error);
+        Err(_) => {
         }
     }
 }
@@ -429,7 +421,6 @@ fn spawn_taskbar_watchdog() {
                 })
         };
         if invalid && !native_interop::find_taskbars().is_empty() {
-            diagnose::log("watchdog: shell-hosted surface was destroyed -> relaunching");
             relaunch_self();
         }
 
@@ -764,16 +755,12 @@ fn save_state_settings() {
         persisted.floating_card_opacity = s.floating_card_opacity;
         // The monitor owns its dimensions, so leave the freshly
         // loaded values unchanged when monitor actions persist settings.
-        if let Err(error) = save_settings(&persisted) {
-            diagnose::log(format!("unable to save settings: {error}"));
-        }
+        let _ = save_settings(&persisted);
     }
 }
 
-fn save_settings_or_log(settings: &SettingsFile, context: &str) {
-    if let Err(error) = save_settings(settings) {
-        diagnose::log(format!("{context}: {error}"));
-    }
+fn save_settings_or_log(settings: &SettingsFile, _context: &str) {
+    let _ = save_settings(settings);
 }
 
 fn tray_usage_summary_lines(
@@ -929,10 +916,6 @@ fn sync_tray_icon(hwnd: HWND) {
                                 1.0
                             });
                         if scale < 0.25 {
-                            diagnose::log(format!(
-                                "tray-icon theme surface '{}' exceeds the 512px source limit",
-                                surface.name
-                            ));
                             return None;
                         }
                         let rendered = theme_engine::render_theme_surface_with_runtime_at_scale(
@@ -1675,9 +1658,6 @@ unsafe fn create_desktop_surface_window() -> HWND {
     .unwrap_or_default();
     let _ = SetThreadDpiAwarenessContext(previous_dpi);
     let _ = SetThreadDpiHostingBehavior(previous_hosting);
-    if window.is_invalid() {
-        diagnose::log("unable to create raised-desktop surface window");
-    }
     window
 }
 
@@ -1801,8 +1781,6 @@ pub fn run() {
         let _ = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         CURRENT_DPI.store(GetDpiForSystem(), Ordering::Relaxed);
     }
-    diagnose::log("window::run started");
-
     // Single-instance guard: silently exit if another instance is running.
     // Exception: when relaunched after an explorer restart (ENV_RELAUNCH set),
     // wait for the previous instance to release the mutex, then take over.
@@ -1812,40 +1790,28 @@ pub fn run() {
     } else {
         "Global\\AIUsage".to_string()
     });
-    diagnose::log("window::run checking mutex");
     let _mutex = unsafe {
         let handle = CreateMutexW(None, true, PCWSTR::from_raw(mutex_name.as_ptr()));
         match handle {
             Ok(h) => {
                 let err = GetLastError();
-                diagnose::log(format!("CreateMutexW succeeded, GetLastError = {err:?}"));
                 if err == ERROR_ALREADY_EXISTS {
                     if is_relaunch {
-                        diagnose::log("relaunch: waiting for previous instance to exit");
                         let wait_result = WaitForSingleObject(h, 10_000);
                         if wait_result != WAIT_OBJECT_0 && wait_result != WAIT_ABANDONED {
-                            diagnose::log(format!(
-                                "startup aborted: previous instance did not exit cleanly ({wait_result:?})"
-                            ));
                             return;
                         }
                     } else {
-                        diagnose::log("startup aborted: another instance is already running");
                         return;
                     }
                 }
                 h
             }
-            Err(error) => {
-                diagnose::log_error(
-                    "startup aborted: unable to create single-instance mutex",
-                    error,
-                );
+            Err(_) => {
                 return;
             }
         }
     };
-    diagnose::log("mutex acquired successfully");
 
     let class_name = native_interop::wide_str("AIUsage");
 
@@ -1866,10 +1832,7 @@ pub fn run() {
             ..Default::default()
         };
 
-        let atom = RegisterClassExW(&wc);
-        if atom == 0 {
-            diagnose::log("RegisterClassExW returned 0");
-        }
+        let _ = RegisterClassExW(&wc);
 
         let mut settings = load_settings();
         let classic_theme_path = theme_engine::ensure_starter_theme().ok();
@@ -1903,19 +1866,9 @@ pub fn run() {
                         settings.custom_theme_enabled = true;
                         settings.consume_legacy_placement();
                         settings.consume_legacy_widget_visibility();
-                        if let Err(error) = save_settings(&settings) {
-                            diagnose::log(format!(
-                                "migrated theme created but settings cleanup failed: {error}"
-                            ));
-                        } else {
-                            diagnose::log(
-                                "legacy placement and visibility migrated to Migrated Theme",
-                            );
-                        }
+                        let _ = save_settings(&settings);
                     }
-                    Err(error) => diagnose::log(format!(
-                        "legacy theme migration deferred because the copied theme could not be saved: {error}"
-                    )),
+                    Err(_) => {}
                 }
             } else {
                 // An explicitly visible v1.4.9 widget already matches the
@@ -2007,8 +1960,6 @@ pub fn run() {
             );
         }
 
-        diagnose::log(format!("main window created hwnd={:?}", hwnd));
-
         let is_dark = theme::is_dark_mode();
         {
             let mut state = lock_state();
@@ -2075,7 +2026,6 @@ pub fn run() {
 
         // Theme surfaces decide whether their windows render.
         position_at_taskbar();
-        diagnose::log("window shown");
 
         // Initial render using the presenter selected by the surface nest.
         render_layered();
@@ -2102,7 +2052,6 @@ pub fn run() {
 
         // Initial poll
         if !no_poll {
-            diagnose::log("initial poll requested");
             request_poll(hwnd);
         }
 
@@ -2205,7 +2154,6 @@ fn render_layered() {
         }
 
         if surface_index == 0 && nest == SurfaceNest::Taskbar && taskbar_ring_badge {
-            diagnose::log("render_layered: taskbar_ring_badge branch entered");
             let settings = app_settings::load_settings();
             let default_data = AppUsageData::default();
             let data_ref = usage_data.as_ref().unwrap_or(&default_data);
@@ -2220,11 +2168,6 @@ fn render_layered() {
                 target_ring_size,
                 target_gap,
             ) {
-                diagnose::log(format!(
-                    "render_layered: ring_badge image generated {}x{} at scale {scale}",
-                    ring_img.width(),
-                    ring_img.height()
-                ));
                 let y_offset = (target_canvas_height.saturating_sub(ring_img.height())) / 2;
                 let mut padded_img = image::RgbaImage::new(ring_img.width(), target_canvas_height);
                 for y in 0..ring_img.height() {
@@ -2340,7 +2283,6 @@ fn request_poll_inner(hwnd: HWND, queue_if_busy: bool) {
     {
         if queue_if_busy {
             POLL_PENDING.store(true, Ordering::Release);
-            diagnose::log("poll already running; manual refresh queued");
         }
         return;
     }
@@ -2373,7 +2315,6 @@ fn poll_worker(send_hwnd: SendHwnd) {
 }
 
 fn do_poll_once(hwnd: HWND) {
-    let poll_started = Instant::now();
     let (enabled_providers, accounts, previous, force) = {
         let mut state = lock_state();
         state
@@ -2389,7 +2330,6 @@ fn do_poll_once(hwnd: HWND) {
             .unwrap_or_default()
     };
 
-    diagnose::log_lazy(|| format!("poll started providers={enabled_providers:?} force={force}"));
     match poller::poll(enabled_providers, &accounts, previous.as_ref(), force) {
         Ok(data) => {
             let mut state = lock_state();
@@ -2440,16 +2380,7 @@ fn do_poll_once(hwnd: HWND) {
                 s.auth_watch_snapshot.clear();
             }
             drop(state);
-            match app_settings::save_usage_cache(&cache_data, true) {
-                Ok(()) => diagnose::log_lazy(|| {
-                    format!(
-                        "usage cache saved: accounts={} elapsed_ms={}",
-                        cache_data.accounts.len(),
-                        poll_started.elapsed().as_millis()
-                    )
-                }),
-                Err(error) => diagnose::log_error("unable to save usage cache", error),
-            }
+            let _ = app_settings::save_usage_cache(&cache_data, true);
             if !notifications.is_empty() {
                 let body = notifications
                     .iter()
@@ -2470,12 +2401,6 @@ fn do_poll_once(hwnd: HWND) {
             }
         }
         Err(failure) => {
-            diagnose::log_lazy(|| {
-                format!(
-                    "poll failed: {failure:?} elapsed_ms={}",
-                    poll_started.elapsed().as_millis()
-                )
-            });
             if lock_state()
                 .as_ref()
                 .is_some_and(|s| s.providers != enabled_providers || s.accounts != accounts)

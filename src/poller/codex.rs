@@ -8,7 +8,6 @@ use serde::Deserialize;
 
 use super::{build_agent, unix_to_system_time, PollError};
 use crate::app_settings;
-use crate::diagnose;
 use crate::models::{CodexCreditsState, CreditsSection, UsageData, UsageSection};
 
 const CODEX_USAGE_URL: &str = "https://chatgpt.com/backend-api/wham/usage";
@@ -100,7 +99,6 @@ pub(super) fn poll_account(path: &Path) -> Result<UsageData, PollError> {
     let creds = match read_codex_credentials_at(path) {
         Some(creds) => creds,
         None => {
-            diagnose::log("Codex usage poll failed: no Codex credentials found");
             return Err(PollError::NoCredentials);
         }
     };
@@ -143,21 +141,16 @@ fn fetch_codex_usage_at(
     let mut resp = match request.call() {
         Ok(resp) => resp,
         Err(ureq::Error::StatusCode(code)) if code == 401 || code == 403 => {
-            diagnose::log(format!(
-                "Codex usage endpoint returned auth error status {code}; refresh required"
-            ));
             return Err(PollError::AuthRequired);
         }
-        Err(error) => {
-            diagnose::log_error("Codex usage endpoint request failed", error);
+        Err(_) => {
             return Err(PollError::RequestFailed);
         }
     };
 
     let response: CodexUsageResponse = match resp.body_mut().read_json() {
         Ok(response) => response,
-        Err(error) => {
-            diagnose::log_error("unable to parse Codex usage response", error);
+        Err(_) => {
             return Err(PollError::RequestFailed);
         }
     };
@@ -221,9 +214,7 @@ fn codex_usage_from_response_at(
             Some(path) => app_settings::write_json_atomic(path, &state),
             None => app_settings::save_codex_credits(&state),
         };
-        if let Err(error) = saved {
-            diagnose::log(format!("unable to persist Codex credit baseline: {error}"));
-        }
+        let _ = saved;
         section
     });
 
@@ -349,14 +340,7 @@ pub(super) fn codex_auth_path() -> Option<PathBuf> {
 fn read_codex_credentials_at(auth_path: &Path) -> Option<CodexTokenData> {
     let content = match std::fs::read_to_string(auth_path) {
         Ok(content) => content,
-        Err(error) => {
-            diagnose::log_error(
-                &format!(
-                    "unable to read Codex credentials at {}",
-                    auth_path.display()
-                ),
-                error,
-            );
+        Err(_) => {
             return None;
         }
     };
@@ -369,9 +353,6 @@ fn cli_refresh_codex_token(directory: &Path) {
     let codex_path = resolve_windows_codex_path();
     let is_cmd = codex_path.to_lowercase().ends_with(".cmd");
     let is_ps1 = codex_path.to_lowercase().ends_with(".ps1");
-    diagnose::log(format!(
-        "attempting Windows Codex token refresh via {codex_path}"
-    ));
 
     let args: &[&str] = &["exec", "."];
     let mut command = if is_cmd {
@@ -402,8 +383,7 @@ fn cli_refresh_codex_token(directory: &Path) {
 
     let mut child = match command.spawn() {
         Ok(child) => child,
-        Err(error) => {
-            diagnose::log_error("unable to spawn Windows Codex token refresh", error);
+        Err(_) => {
             return;
         }
     };

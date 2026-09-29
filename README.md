@@ -176,26 +176,12 @@ src/
 
 ---
 
-## 문제 해결 및 진단 (Diagnostics)
+## 문제 해결
 
-문제가 발생할 경우 진단 모드로 실행하여 로그를 확인할 수 있습니다:
-
-```bash
-# macOS
-./ai-usage --diagnose
-
-# Windows
-.\ai-usage.exe --diagnose
-```
-
-- **이어쓰기**: 기존 로그를 지우지 않고 이어쓰려면 `--diagnose-append`를 대신 사용하십시오.
-- **로그 파일 위치**: OS 임시 디렉터리의 `ai-usage.log`
-  - macOS: `$TMPDIR/ai-usage.log` (기본 `~/Library/Caches/TemporaryItems/`)
-  - Windows: `%TEMP%\ai-usage.log`
 - **설정 파일 위치**:
   - macOS: `~/Library/Application Support/ai-usage/settings.json`
   - Windows: `%APPDATA%\ai-usage\settings.json`
-- **설정 파일 복구**: 설정 파일이 손상되어 파싱에 실패하면 원본은 `settings.json.corrupt-<타임스탬프>`로 보존되고, 앱은 기본값으로 시작합니다. 이 경우 로그에 경고가 남습니다.
+- **설정 파일 복구**: 설정 파일이 손상되어 파싱에 실패하면 원본은 `settings.json.corrupt-<타임스탬프>`로 보존되고, 앱은 기본값으로 시작합니다.
 
 ---
 

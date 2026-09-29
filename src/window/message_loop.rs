@@ -172,7 +172,6 @@ pub(super) unsafe extern "system" fn wnd_proc(
             LRESULT(0)
         }
         WM_APP_REFRESH_NOW => {
-            diagnose::log("Refresh now received by monitor");
             if let Some(state) = lock_state().as_mut() {
                 state.force_notify_auth_error = true;
             }
@@ -641,7 +640,6 @@ pub(super) unsafe extern "system" fn wnd_proc(
                         SWP_NOACTIVATE,
                     );
                 }
-                diagnose::log("taskbar collision: auto-ejected widget to floating");
                 render_layered();
             } else if action == 0 && s.auto_ejected {
                 s.auto_ejected = false;
@@ -655,7 +653,6 @@ pub(super) unsafe extern "system" fn wnd_proc(
                 if let Some(s) = lock_state().as_mut() {
                     s.is_switching_window_style = false;
                 }
-                diagnose::log("taskbar collision resolved: re-docked widget to taskbar");
                 position_at_taskbar();
                 render_layered();
             }
@@ -757,14 +754,12 @@ pub(super) unsafe extern "system" fn wnd_proc(
             // Explorer can deliver this synchronously, including while a shell
             // call has re-entered our window procedure. Return before taking
             // STATE, opening windows, or calling back into Explorer.
-            if let Err(error) = PostMessageW(
+            let _ = PostMessageW(
                 Some(hwnd),
                 native_interop::WM_APP_TRAY_DISPATCH,
                 wparam,
                 lparam,
-            ) {
-                diagnose::log_error("unable to queue tray callback", error);
-            }
+            );
             LRESULT(0)
         }
         _ if msg == native_interop::WM_APP_TRAY_DISPATCH => {
@@ -849,11 +844,9 @@ pub(super) unsafe extern "system" fn wnd_proc(
             LRESULT(0)
         }
         WM_CLOSE => {
-            diagnose::log("WM_CLOSE received");
             DefWindowProcW(hwnd, msg, wparam, lparam)
         }
         WM_DESTROY => {
-            diagnose::log("WM_DESTROY received");
             crate::desktop_compositor::clear();
             let (hook, desktop_windows) = {
                 let mut state = lock_state();

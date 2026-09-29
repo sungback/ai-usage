@@ -10,7 +10,6 @@
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use crate::diagnose;
 use crate::models::{AppUsageData, UsageData, UsageSection};
 use crate::providers::{ProviderId, ProviderSet};
 
@@ -194,12 +193,6 @@ fn merge_poll_results(
                 data.insert(provider, usage);
             }
             Err(error) => {
-                if enabled_providers.len() > 1 {
-                    diagnose::log(format!(
-                        "{} usage poll failed: {error:?}",
-                        provider.descriptor().display_name
-                    ));
-                }
                 first_error.get_or_insert(PollFailure { provider, error });
             }
         }

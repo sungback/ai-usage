@@ -11,7 +11,6 @@ use super::{
     build_agent, get_header_f64, get_header_i64, parse_iso8601, unix_to_system_time, HttpResponse,
     PollError,
 };
-use crate::diagnose;
 use crate::models::{CreditsSection, UsageData};
 
 const USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
@@ -103,7 +102,6 @@ pub(super) fn poll_claude_code() -> Result<UsageData, PollError> {
     let creds = match read_first_credentials() {
         Some(c) => c,
         None => {
-            diagnose::log("poll failed: no Claude credentials found");
             return Err(PollError::NoCredentials);
         }
     };
@@ -171,7 +169,6 @@ pub(super) fn poll_account(path: &Path) -> Result<UsageData, PollError> {
 /// CLI credentials path.
 fn desktop_credentials_for_default_path(path: &Path) -> Option<Credentials> {
     let credentials = read_desktop_app_credentials(&desktop_fallback_path(path)?)?;
-    diagnose::log("default profile fell back to the Claude desktop app token cache");
     Some(credentials)
 }
 
@@ -228,11 +225,7 @@ pub(super) fn fetch_usage_with_fallback(token: &str) -> Result<UsageData, PollEr
     }
 
     // Fall back to Messages API with rate limit headers
-    let result = fetch_usage_via_messages(token);
-    if result.is_err() {
-        diagnose::log("usage endpoint and Messages API fallback both failed");
-    }
-    result
+    fetch_usage_via_messages(token)
 }
 
 pub(super) fn try_usage_endpoint(token: &str) -> Result<Option<UsageData>, PollError> {
@@ -247,19 +240,12 @@ pub(super) fn try_usage_endpoint(token: &str) -> Result<Option<UsageData>, PollE
         Ok(resp) => resp,
         Err(error) => match classify_usage_failure(&error) {
             UsageEndpointFailure::Auth => {
-                diagnose::log(format!(
-                    "usage endpoint returned an auth error ({error}); re-login required"
-                ));
                 return Err(usage_request_error(&error));
             }
             UsageEndpointFailure::Transient => {
-                diagnose::log(format!("usage endpoint temporarily unavailable ({error})"));
                 return Err(usage_request_error(&error));
             }
             UsageEndpointFailure::Unsupported => {
-                diagnose::log(format!(
-                    "usage endpoint unavailable for this account ({error}); trying the Messages API"
-                ));
                 return Ok(None);
             }
         },
@@ -383,9 +369,6 @@ pub(super) fn fetch_usage_via_messages(token: &str) -> Result<UsageData, PollErr
 
         let status = response.status().as_u16();
         if status == 401 || status == 403 {
-            diagnose::log(format!(
-                "messages endpoint returned auth error status {status}; re-login required"
-            ));
             return Err(PollError::HttpStatus(status));
         }
 
@@ -512,9 +495,7 @@ fn cli_refresh_token(source: &CredentialSource) {
         }
         // The desktop app owns this token and refreshes it itself, so there is
         // nothing to drive from here; re-reading the cache is the whole retry.
-        CredentialSource::DesktopApp(_) => {
-            diagnose::log("Claude desktop app refreshes its own token; re-reading the cache")
-        }
+        CredentialSource::DesktopApp(_) => {}
         CredentialSource::Wsl { distro } => cli_refresh_wsl_token(distro),
         CredentialSource::Keychain(_) => {
             #[cfg(target_os = "macos")]
@@ -528,9 +509,6 @@ fn cli_refresh_token(source: &CredentialSource) {
 fn cli_refresh_windows_token(directory: &Path) {
     let claude_path = resolve_windows_claude_path();
     let is_cmd = claude_path.to_lowercase().ends_with(".cmd");
-    diagnose::log(format!(
-        "attempting Windows Claude token refresh via {claude_path}"
-    ));
 
     let args: &[&str] = &["-p", "."];
     let mut command = if is_cmd {
@@ -553,8 +531,7 @@ fn cli_refresh_windows_token(directory: &Path) {
 
     let mut child = match command.spawn() {
         Ok(child) => child,
-        Err(error) => {
-            diagnose::log_error("unable to spawn Windows Claude token refresh", error);
+        Err(_) => {
             return;
         }
     };
@@ -562,9 +539,6 @@ fn cli_refresh_windows_token(directory: &Path) {
 }
 
 fn cli_refresh_wsl_token(distro: &str) {
-    diagnose::log(format!(
-        "attempting WSL Claude token refresh in distro {distro}"
-    ));
     let mut command = Command::new("wsl.exe");
     command
         .arg("-d")
@@ -582,8 +556,7 @@ fn cli_refresh_wsl_token(distro: &str) {
 
     let mut child = match command.spawn() {
         Ok(child) => child,
-        Err(error) => {
-            diagnose::log_error("unable to spawn WSL Claude token refresh", error);
+        Err(_) => {
             return;
         }
     };
@@ -676,13 +649,7 @@ fn read_first_credentials() -> Option<Credentials> {
 fn read_windows_credentials(path: &Path) -> Option<Credentials> {
     let content = match std::fs::read_to_string(path) {
         Ok(content) => content,
-        Err(error) => {
-            if diagnose::is_enabled() {
-                diagnose::log_error(
-                    &format!("unable to read Windows credentials at {}", path.display()),
-                    error,
-                );
-            }
+        Err(_) => {
             return None;
         }
     };
@@ -691,7 +658,6 @@ fn read_windows_credentials(path: &Path) -> Option<Credentials> {
 
 fn read_desktop_app_credentials(path: &Path) -> Option<Credentials> {
     let token = claude_desktop::read_token(path)?;
-    diagnose::log("using the Claude desktop app token cache");
     Some(Credentials {
         access_token: token.access_token,
         expires_at: token.expires_at,
@@ -710,7 +676,6 @@ fn read_keychain_credentials(service: &str) -> Option<Credentials> {
             return None;
         }
         let content = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        diagnose::log("using macOS Keychain Claude credentials");
         parse_credentials(&content, CredentialSource::Keychain(service.to_string()))
     }
     #[cfg(not(target_os = "macos"))]
@@ -745,10 +710,6 @@ fn read_wsl_credentials(distro: &str) -> Option<Credentials> {
     )?;
 
     if !output.status.success() {
-        diagnose::log(format!(
-            "WSL credentials probe failed for distro {distro} with status {}",
-            output.status
-        ));
         return None;
     }
 
@@ -895,7 +856,6 @@ fn list_wsl_distros() -> Vec<String> {
     ) {
         Some(output) if output.status.success() => output,
         _ => {
-            diagnose::log("unable to enumerate WSL distros");
             return Vec::new();
         }
     };

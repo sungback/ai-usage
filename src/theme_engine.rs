@@ -2050,10 +2050,7 @@ impl ThemeDocument {
     pub fn starter() -> Self {
         let mut theme: Self = match serde_json::from_str(BUILTIN_THEME_SOURCES[0].1) {
             Ok(theme) => theme,
-            Err(error) => {
-                crate::diagnose::log(format!(
-                    "Built-in Classic theme failed to parse, using empty fallback: {error}"
-                ));
+            Err(_) => {
                 Self {
                     schema_version: THEME_SCHEMA_VERSION,
                     id: CLASSIC_THEME_ID.into(),

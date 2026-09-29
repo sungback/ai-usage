@@ -7,10 +7,7 @@ pub(super) fn show_context_menu_document(
 ) {
     let mut document = match context_menu::resolve_context_menu(reference) {
         Ok(document) => document,
-        Err(error) => {
-            diagnose::log(format!("context menu load failed: {error}"));
-            context_menu::classic_context_menu()
-        }
+        Err(_) => context_menu::classic_context_menu(),
     };
     document.items.push(ContextMenuItem::separator("version-separator"));
     document
@@ -344,7 +341,7 @@ pub(super) fn execute_context_menu_action(
             let _ = execute_mouse_action_source(surface_index, &self_id, &actions);
         }
         ContextMenuAction::OpenUrl { url } => {
-            open_web_url(hwnd, &url, "context menu URL could not be opened")
+            open_web_url(hwnd, &url)
         }
         _ => {}
     }

@@ -12,7 +12,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Deserialize;
 
 use super::{build_agent, parse_iso8601, PollError};
-use crate::diagnose;
 use crate::models::{UsageData, UsageSection};
 
 const CURSOR_USAGE_SUMMARY_URL: &str = "https://cursor.com/api/usage-summary";
@@ -43,12 +42,7 @@ struct CursorPlanUsage {
 }
 
 pub(super) fn poll_cursor() -> Result<UsageData, PollError> {
-    let cookie = read_cursor_session_cookie().ok_or_else(|| {
-        diagnose::log(
-            "Cursor usage poll failed: no Cursor session found (sign in to Cursor or set CURSOR_SESSION_TOKEN)",
-        );
-        PollError::NoCredentials
-    })?;
+    let cookie = read_cursor_session_cookie().ok_or(PollError::NoCredentials)?;
     fetch_cursor_usage(&cookie)
 }
 
@@ -151,12 +145,7 @@ fn read_cursor_access_token_from_state_db() -> Option<String> {
     let path = cursor_state_db_path()?;
     match query_cursor_access_token(&path) {
         Ok(token) => token,
-        Err(error) => {
-            diagnose::log(format!(
-                "Cursor state DB direct read failed ({error}); retrying via temp copy"
-            ));
-            query_cursor_access_token_from_copy(&path)
-        }
+        Err(_) => query_cursor_access_token_from_copy(&path),
     }
 }
 
@@ -166,22 +155,15 @@ fn query_cursor_access_token_from_copy(path: &Path) -> Option<String> {
         .unwrap_or_default()
         .as_nanos();
     let temporary = std::env::temp_dir().join(format!(
-        "claude-monitor-cursor-state-{}-{unique}.vscdb",
+        "ai-usage-cursor-state-{}-{unique}.vscdb",
         std::process::id()
     ));
-    if let Err(error) = std::fs::copy(path, &temporary) {
-        diagnose::log(format!("Cursor state DB temp copy failed: {error}"));
+    if std::fs::copy(path, &temporary).is_err() {
         return None;
     }
     let result = query_cursor_access_token(&temporary);
     let _ = std::fs::remove_file(&temporary);
-    match result {
-        Ok(token) => token,
-        Err(error) => {
-            diagnose::log(format!("Cursor state DB temp-copy read failed: {error}"));
-            None
-        }
-    }
+    result.unwrap_or_default()
 }
 
 fn query_cursor_access_token(path: &Path) -> Result<Option<String>, crate::winsqlite::Error> {
@@ -203,21 +185,14 @@ fn fetch_cursor_usage(cookie: &str) -> Result<UsageData, PollError> {
     {
         Ok(response) => response,
         Err(ureq::Error::StatusCode(401 | 403)) => return Err(PollError::AuthRequired),
-        Err(error) => {
-            diagnose::log_error("Cursor usage-summary request failed", error);
+        Err(_) => {
             return Err(PollError::RequestFailed);
         }
     };
 
     let response: CursorUsageSummaryResponse =
-        response.body_mut().read_json().map_err(|error| {
-            diagnose::log_error("unable to parse Cursor usage-summary response", error);
-            PollError::RequestFailed
-        })?;
-    cursor_usage_from_summary(response).ok_or_else(|| {
-        diagnose::log("Cursor usage-summary response missing plan usage");
-        PollError::RequestFailed
-    })
+        response.body_mut().read_json().map_err(|_| PollError::RequestFailed)?;
+    cursor_usage_from_summary(response).ok_or(PollError::RequestFailed)
 }
 
 fn cursor_usage_from_summary(response: CursorUsageSummaryResponse) -> Option<UsageData> {

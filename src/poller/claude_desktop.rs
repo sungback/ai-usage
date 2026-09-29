@@ -17,8 +17,6 @@
 use std::ffi::c_void;
 use std::path::{Path, PathBuf};
 
-use crate::diagnose;
-
 /// Newest layout first. The desktop app migrated its cache to
 /// `oauth:tokenCacheV2` and leaves the older `oauth:tokenCache` key in place,
 /// so both are tried and the first that yields a usable token wins.
@@ -46,44 +44,24 @@ fn local_state_path(config_path: &Path) -> PathBuf {
 }
 
 pub(super) fn read_token(config_path: &Path) -> Option<DesktopToken> {
-    let config = match std::fs::read_to_string(config_path) {
-        Ok(config) => config,
-        Err(error) => {
-            if diagnose::is_enabled() {
-                diagnose::log_error(
-                    &format!(
-                        "unable to read Claude desktop config at {}",
-                        config_path.display()
-                    ),
-                    error,
-                );
-            }
-            return None;
-        }
-    };
+    let config = std::fs::read_to_string(config_path).ok()?;
 
     let caches = token_cache_values(&config);
     if caches.is_empty() {
-        diagnose::log("Claude desktop config held no OAuth token cache");
         return None;
     }
     let key = os_crypt_key(&local_state_path(config_path))?;
 
-    for (name, cache) in &caches {
+    for (_, cache) in &caches {
         let Some(plaintext) = decrypt_os_crypt_value(cache, &key) else {
-            diagnose::log(format!("unable to decrypt Claude desktop {name}"));
             continue;
         };
         let Ok(plaintext) = String::from_utf8(plaintext) else {
-            diagnose::log(format!("Claude desktop {name} was not valid UTF-8"));
             continue;
         };
         if let Some(token) = select_token(&plaintext) {
             return Some(token);
         }
-        diagnose::log(format!(
-            "Claude desktop {name} held no usable inference token"
-        ));
     }
 
     None
@@ -352,7 +330,6 @@ fn dpapi_unprotect(data: &[u8]) -> Option<Vec<u8>> {
     };
 
     if ok == 0 || output.pb_data.is_null() {
-        diagnose::log("unable to unwrap the Claude desktop OSCrypt key with DPAPI");
         return None;
     }
 
@@ -371,7 +348,6 @@ fn aes_gcm_decrypt(key: &[u8], nonce: &[u8], ciphertext: &[u8], tag: &[u8]) -> O
         BCryptOpenAlgorithmProvider(&mut algorithm, algorithm_id.as_ptr(), std::ptr::null(), 0)
     } != 0
     {
-        diagnose::log("unable to open the AES provider for the Claude desktop token cache");
         return None;
     }
 
@@ -401,7 +377,6 @@ fn with_gcm_key(
         )
     } != 0
     {
-        diagnose::log("unable to select GCM chaining for the Claude desktop token cache");
         return None;
     }
 
@@ -437,7 +412,6 @@ fn with_gcm_key(
         )
     } != 0
     {
-        diagnose::log("unable to import the Claude desktop OSCrypt key");
         return None;
     }
 
@@ -490,7 +464,6 @@ fn decrypt_with_key(
     };
 
     if status != 0 {
-        diagnose::log("Claude desktop token cache failed AES-GCM authentication");
         return None;
     }
 

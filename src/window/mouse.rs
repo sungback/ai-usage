@@ -121,7 +121,7 @@ pub(super) fn execute_mouse_action_source(
             for effect in effects {
                 match effect {
                     MouseActionEffect::OpenUrl(url) => {
-                        open_web_url(owner, &url, "mouse action URL could not be opened")
+                        open_web_url(owner, &url)
                     }
                     MouseActionEffect::ShowContextMenu(menu) => show_context_menu_document(
                         owner,
@@ -132,10 +132,7 @@ pub(super) fn execute_mouse_action_source(
             }
             true
         }
-        Err(error) => {
-            diagnose::log(format!(
-                "mouse action failed surface={surface_index} layer={object_id}: {error}"
-            ));
+        Err(_) => {
             false
         }
     }
@@ -222,7 +219,6 @@ pub(super) fn update_mouse_hover(hwnd: HWND, lparam: LPARAM) {
             let _ = dispatch_mouse_event(*surface, object, MouseEventKind::MouseEnter);
         }
     }
-    diagnose::log("mouse enter/leave actions did not stabilize after four transitions");
     if let Some(state) = lock_state().as_mut() {
         state.hovered_mouse_layer = None;
     }
