@@ -33,7 +33,9 @@ fn main() {
     }));
 
     let args: Vec<String> = std::env::args().collect();
-    let diagnose_enabled = args.iter().any(|arg| arg == "--diagnose");
+    let diagnose_enabled = args
+        .iter()
+        .any(|arg| arg == "--diagnose" || arg == "--diagnose-append");
     if diagnose_enabled {
         let init_result = if args.iter().any(|arg| arg == "--diagnose-append") {
             diagnose::init_append()
