@@ -321,7 +321,9 @@ impl Parser<'_> {
             .ok_or_else(|| "Invalid number".to_string())
     }
     fn parse_string(&mut self) -> Result<String, String> {
-        let quote = self.peek().expect("parse_string requires a quote");
+        let Some(quote) = self.peek() else {
+            return Err("Expected an opening quote in text".into());
+        };
         self.index += 1;
         let mut result = Vec::new();
         while let Some(character) = self.peek() {
