@@ -10,7 +10,7 @@ pub mod tray;
 
 pub use startup::{is_startup_enabled, set_startup_enabled};
 pub use tray::{
-    build_context_menu, compute_tooltip, render_compact_menu_badge,
+    app_version_label, build_context_menu, compute_tooltip, render_compact_menu_badge,
 };
 
 use std::sync::mpsc;
@@ -440,6 +440,13 @@ mod tests {
         assert_eq!(img.width(), 140);
         assert_eq!(img.height(), 44);
         assert!(img.pixels().any(|p| p[3] > 0));
+    }
+
+    #[test]
+    fn test_app_version_label_tracks_package_version() {
+        let label = app_version_label();
+        assert!(label.starts_with("AI Usage Monitor v"));
+        assert!(label.contains(env!("CARGO_PKG_VERSION")));
     }
 
     #[test]

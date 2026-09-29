@@ -5,13 +5,17 @@ pub(super) fn show_context_menu_document(
     reference: Option<&str>,
     origin: Option<(usize, String)>,
 ) {
-    let document = match context_menu::resolve_context_menu(reference) {
+    let mut document = match context_menu::resolve_context_menu(reference) {
         Ok(document) => document,
         Err(error) => {
             diagnose::log(format!("context menu load failed: {error}"));
             context_menu::classic_context_menu()
         }
     };
+    document.items.push(ContextMenuItem::separator("version-separator"));
+    document
+        .items
+        .push(ContextMenuItem::text("version", &app_version_label()));
     let language = lock_state()
         .as_ref()
         .map(|state| state.language)
@@ -233,6 +237,10 @@ pub(super) fn context_menu_action_origin(
     })
 }
 
+pub(super) fn app_version_label() -> String {
+    format!("AI Usage Monitor v{}", env!("CARGO_PKG_VERSION"))
+}
+
 pub(super) fn context_menu_widget_origin(theme: &ThemeDocument) -> Option<(usize, String)> {
     theme
         .surfaces
@@ -348,6 +356,13 @@ pub(super) fn execute_context_menu_action(
 mod tests {
     use super::*;
     use windows::Win32::UI::WindowsAndMessaging::{GetMenuItemCount, GetMenuItemID, GetSubMenu};
+
+    #[test]
+    fn app_version_label_tracks_package_version() {
+        let label = app_version_label();
+        assert!(label.starts_with("AI Usage Monitor v"));
+        assert!(label.contains(env!("CARGO_PKG_VERSION")));
+    }
 
     #[test]
     fn conditional_native_rows_and_subtrees_preserve_action_ids_on_each_open() {

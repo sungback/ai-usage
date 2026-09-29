@@ -126,7 +126,7 @@ impl ContextMenuItem {
         }
     }
 
-    #[cfg(test)]
+    #[cfg_attr(not(any(windows, test)), allow(dead_code))]
     pub fn text(id: &str, label: &str) -> Self {
         Self {
             id: id.into(),

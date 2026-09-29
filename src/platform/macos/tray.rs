@@ -7,6 +7,10 @@ use tray_icon::{
 
 use super::startup::is_startup_enabled;
 
+pub fn app_version_label() -> String {
+    format!("AI Usage Monitor v{}", env!("CARGO_PKG_VERSION"))
+}
+
 // ── 내부 포맷 헬퍼 ─────────────────────────────────────────────────────────
 
 fn format_reset_time(resets_at: Option<std::time::SystemTime>) -> Option<String> {
@@ -201,6 +205,7 @@ pub fn build_context_menu(
         true,
         None,
     ));
+    let _ = menu.append(&MenuItem::new(app_version_label(), false, None));
 
     menu
 }
