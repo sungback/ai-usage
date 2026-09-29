@@ -10,8 +10,7 @@ pub mod tray;
 
 pub use startup::{is_startup_enabled, set_startup_enabled};
 pub use tray::{
-    build_context_menu, compute_menu_bar_title, compute_tooltip,
-    load_app_icon, render_compact_menu_badge,
+    build_context_menu, compute_tooltip, render_compact_menu_badge,
 };
 
 use std::sync::mpsc;
@@ -65,16 +64,10 @@ impl MacOsMonitorApp {
         let menu = build_context_menu(&self.current_usage, &self.available_update, &settings, lang);
         let _ = tray.set_menu(Some(Box::new(menu)));
 
-        if let Some(badge_icon) = render_compact_menu_badge(&self.current_usage, &settings) {
-            let _ = tray.set_icon_as_template(false);
-            let _ = tray.set_icon(Some(badge_icon));
-            tray.set_title::<&str>(None);
-        } else {
-            let _ = tray.set_icon_as_template(true);
-            let _ = tray.set_icon(load_app_icon());
-            let title = compute_menu_bar_title(&self.current_usage, &settings, lang);
-            tray.set_title(Some(title));
-        }
+        let badge_icon = render_compact_menu_badge(&self.current_usage, &settings);
+        let _ = tray.set_icon_as_template(false);
+        let _ = tray.set_icon(Some(badge_icon));
+        tray.set_title::<&str>(None);
 
         let tooltip = compute_tooltip(&self.current_usage, settings.usage_countdown, lang);
         let _ = tray.set_tooltip(Some(tooltip));
@@ -281,23 +274,15 @@ pub fn run() {
     );
     let cached_usage = crate::app_settings::load_usage_cache().map(|c| c.data);
     let initial_menu = build_context_menu(&cached_usage, &None, &settings, lang);
-    let initial_title = compute_menu_bar_title(&cached_usage, &settings, lang);
     let initial_tooltip = compute_tooltip(&cached_usage, settings.usage_countdown, lang);
     let initial_badge = render_compact_menu_badge(&cached_usage, &settings);
 
     // 트레이 아이콘 생성
-    let mut builder = TrayIconBuilder::new()
+    let builder = TrayIconBuilder::new()
         .with_menu(Box::new(initial_menu))
-        .with_tooltip(initial_tooltip);
-
-    if let Some(badge) = initial_badge {
-        builder = builder.with_icon(badge).with_icon_as_template(false);
-    } else {
-        if let Some(icon) = load_app_icon() {
-            builder = builder.with_icon(icon);
-        }
-        builder = builder.with_title(initial_title).with_icon_as_template(true);
-    }
+        .with_tooltip(initial_tooltip)
+        .with_icon(initial_badge)
+        .with_icon_as_template(false);
 
     let tray = match builder.build() {
         Ok(t) => Some(t),
@@ -407,65 +392,6 @@ mod tests {
     }
 
     #[test]
-    fn test_compute_menu_bar_title_single_provider() {
-        let mut data = AppUsageData::default();
-        data.insert(ProviderId::Claude, make_usage(0.0, 47.0));
-
-        let mut settings = crate::app_settings::SettingsFile::default();
-        settings.usage_countdown = true;
-
-        let title = compute_menu_bar_title(
-            &Some(data),
-            &settings,
-            crate::localization::LanguageId::Korean,
-        );
-        assert_eq!(title, "5시간 100% · 7일 53%");
-    }
-
-    #[test]
-    fn test_compute_menu_bar_title_multiple_providers() {
-        let mut data = AppUsageData::default();
-        data.insert(ProviderId::Claude, make_usage(0.0, 47.0));
-        data.insert(ProviderId::Codex, make_usage(0.0, 17.0));
-
-        let mut settings = crate::app_settings::SettingsFile::default();
-        settings.usage_countdown = true;
-        settings.set_provider_enabled(ProviderId::Codex, true);
-
-        let title = compute_menu_bar_title(
-            &Some(data),
-            &settings,
-            crate::localization::LanguageId::Korean,
-        );
-        assert_eq!(title, "Claude: 100% 53% | Codex: 100% 83%");
-    }
-
-    #[test]
-    fn test_compute_menu_bar_title_spent_mode() {
-        let mut data = AppUsageData::default();
-        data.insert(ProviderId::Claude, make_usage(0.0, 47.0));
-
-        let mut settings = crate::app_settings::SettingsFile::default();
-        settings.usage_countdown = false;
-
-        let title = compute_menu_bar_title(
-            &Some(data),
-            &settings,
-            crate::localization::LanguageId::Korean,
-        );
-        assert_eq!(title, "5시간 0% · 7일 47%");
-    }
-
-    #[test]
-    fn test_format_percentage_countdown() {
-        use super::tray::format_percentage;
-        assert_eq!(format_percentage(0.0, true), "100%");
-        assert_eq!(format_percentage(47.0, true), "53%");
-        assert_eq!(format_percentage(100.0, true), "0%");
-        assert_eq!(format_percentage(47.0, false), "47%");
-    }
-
-    #[test]
     fn test_parse_hex_color() {
         assert_eq!(parse_hex_color("#FF0000"), Some(Rgba([255, 0, 0, 255])));
         assert_eq!(parse_hex_color("#4A90D9"), Some(Rgba([74, 144, 217, 255])));
@@ -492,21 +418,27 @@ mod tests {
     }
 
     #[test]
-    fn test_render_ring_badge_multi_provider() {
+    fn test_compact_menu_badge_renders_single_44px_ring() {
         let mut data = AppUsageData::default();
         data.insert(ProviderId::Codex, make_usage(30.0, 50.0));
         data.insert(ProviderId::Claude, make_usage(10.0, 47.0));
-        data.insert(ProviderId::Antigravity, make_usage(0.0, 25.0));
 
         let mut settings = crate::app_settings::SettingsFile::default();
         settings.set_provider_enabled(ProviderId::Codex, true);
         settings.set_provider_enabled(ProviderId::Claude, true);
-        settings.set_provider_enabled(ProviderId::Antigravity, true);
         settings.usage_countdown = true;
 
-        let img = render_ring_badge_image(&data, &settings).expect("multi ring badge should render");
-        assert_eq!(img.width(), 140);
+        let _icon = render_compact_menu_badge(&Some(data.clone()), &settings);
+        let first = settings.enabled_ordered_providers().first().copied();
+        let img = render_single_provider_ring(
+            first.unwrap_or(ProviderId::Claude),
+            data.get(first.unwrap_or(ProviderId::Claude)),
+            &settings,
+            44,
+        );
+        assert_eq!(img.width(), 44);
         assert_eq!(img.height(), 44);
+        assert!(img.pixels().any(|p| p[3] > 0));
     }
 
     #[test]

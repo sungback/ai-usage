@@ -388,16 +388,8 @@ pub fn render_single_provider_ring(
     )
 }
 
-/// Render the full ring badge image placing one ring pair per active provider side by side.
-#[allow(dead_code)]
-pub fn render_ring_badge_image(
-    data: &AppUsageData,
-    settings: &SettingsFile,
-) -> Option<RgbaImage> {
-    render_ring_badge_image_at_size(data, settings, 44, 4)
-}
-
 /// Render the full ring badge image with customizable ring size and gap.
+#[cfg_attr(not(windows), allow(dead_code))]
 pub fn render_ring_badge_image_at_size(
     data: &AppUsageData,
     settings: &SettingsFile,

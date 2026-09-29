@@ -1,4 +1,4 @@
-//! macOS 트레이 메뉴 빌드 및 메뉴바 타이틀/툴팁 계산.
+//! macOS 트레이 메뉴 빌드 및 툴팁 계산.
 
 use tray_icon::{
     menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
@@ -9,38 +9,7 @@ use super::startup::is_startup_enabled;
 
 // ── 내부 포맷 헬퍼 ─────────────────────────────────────────────────────────
 
-pub(super) fn format_percentage(pct: f64, countdown: bool) -> String {
-    let display_pct = if countdown {
-        (100.0 - pct).clamp(0.0, 100.0)
-    } else {
-        pct
-    };
-    format!("{:.0}%", display_pct)
-}
-
-fn format_compact_reset(resets_at: Option<std::time::SystemTime>) -> Option<String> {
-    let resets_at = resets_at?;
-    let now = std::time::SystemTime::now();
-    if resets_at <= now {
-        return None;
-    }
-    let diff = resets_at.duration_since(now).ok()?;
-    let seconds = diff.as_secs();
-    let days = seconds / 86_400;
-    let hours = (seconds % 86_400) / 3_600;
-    let mins = (seconds % 3_600) / 60;
-    if days > 0 {
-        Some(format!("{days}d"))
-    } else if hours > 0 {
-        Some(format!("{hours}h"))
-    } else if mins > 0 {
-        Some(format!("{mins}m"))
-    } else {
-        None
-    }
-}
-
-pub(super) fn format_reset_time(resets_at: Option<std::time::SystemTime>) -> Option<String> {
+fn format_reset_time(resets_at: Option<std::time::SystemTime>) -> Option<String> {
     let resets_at = resets_at?;
     let now = std::time::SystemTime::now();
     if resets_at > now {
@@ -58,68 +27,7 @@ pub(super) fn format_reset_time(resets_at: Option<std::time::SystemTime>) -> Opt
     }
 }
 
-fn format_window_badge(
-    section: &crate::models::UsageSection,
-    countdown: bool,
-    show_reset: bool,
-) -> String {
-    let pct_str = format_percentage(section.percentage, countdown);
-    if show_reset {
-        if let Some(reset_str) = format_compact_reset(section.resets_at) {
-            return format!("{pct_str}({reset_str})");
-        }
-    }
-    pct_str
-}
-
-// ── 메뉴바 타이틀 / 툴팁 ──────────────────────────────────────────────────
-
-pub fn compute_menu_bar_title(
-    data: &Option<crate::models::AppUsageData>,
-    settings: &crate::app_settings::SettingsFile,
-    lang: crate::localization::LanguageId,
-) -> String {
-    let Some(data) = data else {
-        return "⚡ --%".to_string();
-    };
-
-    let active_providers: Vec<(crate::providers::ProviderId, &crate::models::UsageData)> =
-        data.iter().collect();
-
-    if active_providers.is_empty() {
-        return "⚡ --%".to_string();
-    }
-
-    let countdown = settings.usage_countdown;
-
-    if active_providers.len() == 1 {
-        let (_id, usage) = active_providers[0];
-        let session_str = format_window_badge(&usage.session, countdown, true);
-        let weekly_str = format_window_badge(&usage.weekly, countdown, true);
-        let session_label = if lang.code() == "ko" { "5시간" } else { "5h" };
-        let weekly_label = usage.weekly_label.as_deref().unwrap_or(if lang.code() == "ko" {
-            "7일"
-        } else {
-            "7d"
-        });
-        format!("{session_label} {session_str} · {weekly_label} {weekly_str}")
-    } else {
-        let mut parts = Vec::new();
-        for (provider_id, usage) in active_providers {
-            let short_name = match provider_id {
-                crate::providers::ProviderId::Claude => "Claude",
-                crate::providers::ProviderId::Codex => "Codex",
-                crate::providers::ProviderId::Antigravity => "Anti",
-                crate::providers::ProviderId::OpenCode => "Open",
-                crate::providers::ProviderId::Cursor => "Cursor",
-            };
-            let s_badge = format_window_badge(&usage.session, countdown, true);
-            let w_badge = format_window_badge(&usage.weekly, countdown, true);
-            parts.push(format!("{short_name}: {s_badge} {w_badge}"));
-        }
-        parts.join(" | ")
-    }
-}
+// ── 메뉴바 툴팁 ────────────────────────────────────────────────────────────
 
 pub fn compute_tooltip(
     data: &Option<crate::models::AppUsageData>,
@@ -359,17 +267,20 @@ fn append_order_submenu(
 pub fn render_compact_menu_badge(
     data: &Option<crate::models::AppUsageData>,
     settings: &crate::app_settings::SettingsFile,
-) -> Option<Icon> {
+) -> Icon {
+    let provider = settings
+        .enabled_ordered_providers()
+        .first()
+        .copied()
+        .unwrap_or(crate::providers::ProviderId::Claude);
     let default_data = crate::models::AppUsageData::default();
     let data = data.as_ref().unwrap_or(&default_data);
-    let img = crate::platform::ring_badge::render_ring_badge_image(data, settings)?;
+    let img = crate::platform::ring_badge::render_single_provider_ring(
+        provider,
+        data.get(provider),
+        settings,
+        44,
+    );
     let (width, height) = (img.width(), img.height());
-    Icon::from_rgba(img.into_raw(), width, height).ok()
-}
-
-pub fn load_app_icon() -> Option<Icon> {
-    let bytes = include_bytes!("../../icons/32x32.png");
-    let image = image::load_from_memory(bytes).ok()?.into_rgba8();
-    let (width, height) = image.dimensions();
-    Icon::from_rgba(image.into_raw(), width, height).ok()
+    Icon::from_rgba(img.into_raw(), width, height).expect("single ring badge should render")
 }
