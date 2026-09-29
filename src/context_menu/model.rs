@@ -60,12 +60,6 @@ pub enum ContextMenuAction {
     ResetProviderOrder,
     ToggleStartup,
     ToggleWidget,
-    /// 구버전 저장 메뉴 로드·정리용. 신규 메뉴에서는 생성/실행 불가.
-    #[serde(rename = "reset_position")]
-    LegacyResetPosition,
-    /// v2.12.47 이하가 기록한 언어 항목. 로드만 허용하고 곧바로 제거한다.
-    #[serde(rename = "set_language")]
-    LegacySetLanguage { language: String },
     CheckForUpdates,
     ToggleLayerRender { target: String },
     LayerActions { actions: String },
@@ -264,23 +258,4 @@ fn validate_item_label(item: &ContextMenuItem, kind: &str, errors: &mut Vec<Stri
     for error in crate::theme_engine::validate_template(&item.label, &context) {
         errors.push(format!("{}.label: {error}", item.id));
     }
-}
-
-/// 레거시 LegacyResetPosition 액션 재귀 제거.
-pub fn remove_legacy_context_menu_actions(items: &mut Vec<ContextMenuItem>) {
-    for item in items.iter_mut() {
-        if let ContextMenuItemKind::Submenu { items } = &mut item.kind {
-            remove_legacy_context_menu_actions(items);
-        }
-    }
-    items.retain(|item| match &item.kind {
-        ContextMenuItemKind::Action {
-            action: ContextMenuAction::LegacyResetPosition,
-        }
-        | ContextMenuItemKind::Action {
-            action: ContextMenuAction::LegacySetLanguage { .. },
-        } => false,
-        ContextMenuItemKind::Submenu { items } => !items.is_empty(),
-        _ => true,
-    });
 }

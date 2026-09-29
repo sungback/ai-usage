@@ -329,10 +329,10 @@ const RELAUNCH_THROTTLE_SECS: u64 = 10;
 const RELAUNCH_BACKOFF_SECS: u64 = 30;
 /// Environment flag set on a relaunched child so it waits for the previous
 /// instance's single-instance mutex instead of exiting immediately.
-const ENV_RELAUNCH: &str = "CCUM_RELAUNCH";
+const ENV_RELAUNCH: &str = "AI_USAGE_RELAUNCH";
 /// Unix timestamp (seconds) of the relaunch that spawned this process, passed to
 /// the child so it can detect a relaunch storm.
-const ENV_LAST_RELAUNCH_UNIX: &str = "CCUM_LAST_RELAUNCH_UNIX";
+const ENV_LAST_RELAUNCH_UNIX: &str = "AI_USAGE_LAST_RELAUNCH_UNIX";
 
 /// Relaunch the widget as a fresh process after explorer.exe has restarted.
 ///
@@ -1641,7 +1641,7 @@ unsafe fn create_desktop_surface_window() -> HWND {
         return HWND::default();
     };
     let instance = GetModuleHandleW(PCWSTR::null()).unwrap();
-    let class = native_interop::wide_str("CCUMDesktopSurface");
+    let class = native_interop::wide_str("AIUsageDesktopSurface");
     let title = native_interop::wide_str("");
     let wc = WNDCLASSEXW {
         cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
@@ -1683,7 +1683,7 @@ unsafe fn create_desktop_surface_window() -> HWND {
 
 unsafe fn create_mirror_window() -> HWND {
     let instance = GetModuleHandleW(PCWSTR::null()).unwrap();
-    let class = native_interop::wide_str("CCUMThemeMirror");
+    let class = native_interop::wide_str("AIUsageThemeMirror");
     let wc = WNDCLASSEXW {
         cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
         style: CS_DBLCLKS,
@@ -1876,8 +1876,7 @@ pub fn run() {
         let mut configured_theme_path = settings.active_theme_path.as_deref().map(PathBuf::from);
         let mut configured_theme = configured_theme_path
             .as_deref()
-            .and_then(|path| theme_engine::load_theme(path).ok())
-            .filter(|theme| !theme.is_obsolete_studio_starter());
+            .and_then(|path| theme_engine::load_theme(path).ok());
         let legacy_placement = settings.legacy_placement();
         let legacy_visibility = settings.legacy_widget_visibility();
         if legacy_placement.is_some() || legacy_visibility.is_some() {

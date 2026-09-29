@@ -43,9 +43,8 @@ pub fn ensure_builtin_context_menus() -> Result<PathBuf, String> {
 
 pub fn load_context_menu(path: &Path) -> Result<ContextMenuDocument, String> {
     let source = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-    let mut document: ContextMenuDocument =
+    let document: ContextMenuDocument =
         serde_json::from_str(&source).map_err(|e| e.to_string())?;
-    remove_legacy_context_menu_actions(&mut document.items);
     let errors = document.validate();
     if errors.is_empty() {
         Ok(document)

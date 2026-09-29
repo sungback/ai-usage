@@ -716,7 +716,7 @@ fn ensure_target_location_writable(target: &Path) -> Result<(), String> {
         "Unable to determine the install directory for the current executable.".to_string()
     })?;
 
-    let probe_path = parent.join(".__ccum_update_probe");
+    let probe_path = parent.join(".__ai_usage_update_probe");
     match File::create(&probe_path) {
         Ok(_) => {
             let _ = std::fs::remove_file(&probe_path);

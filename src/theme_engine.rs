@@ -26,7 +26,6 @@ use crate::providers::{ProviderId, ProviderSet, PROVIDER_DESCRIPTORS};
 pub const THEME_SCHEMA_VERSION: u32 = 1;
 pub const CLASSIC_THEME_ID: &str = "classic-usage-widget";
 pub const COMPACT_FLUENT_QUAD_THEME_ID: &str = "compact-fluent-quad";
-pub const MINECRAFT_THEME_ID: &str = "theme-minecraft";
 
 const BUILTIN_THEME_SOURCES: &[(&str, &str)] = &[
     (
@@ -37,40 +36,6 @@ const BUILTIN_THEME_SOURCES: &[(&str, &str)] = &[
         COMPACT_FLUENT_QUAD_THEME_ID,
         include_str!("themes/compact-fluent-quad.json"),
     ),
-];
-
-/// Bundled starting points are copied into the managed library only when they
-/// are missing. Their ids are deliberately excluded from `is_builtin_theme_id`
-/// so users can rename, export, or delete them from the settings folder.
-const BUNDLED_EDITABLE_THEME_SOURCES: &[(&str, &str)] = &[(
-    MINECRAFT_THEME_ID,
-    include_str!("themes/minecraft-codex.json"),
-)];
-const BUNDLED_EDITABLE_INSTALL_MARKER: &str = ".minecraft-theme-installed";
-
-const BUNDLED_THEME_ASSETS: &[(&str, &[u8])] = &[
-    (
-        "minecraft-empty.png",
-        include_bytes!("themes/assets/minecraft-empty.png"),
-    ),
-    (
-        "minecraft-full.png",
-        include_bytes!("themes/assets/minecraft-full.png"),
-    ),
-];
-
-const REMOVED_BUILTIN_THEME_IDS: &[&str] = &[
-    "mission-control",
-    "neon-reactor",
-    "rpg-party-hud",
-    "quota-garden",
-    "tokyo-data-skyline",
-    "pixel-arcade",
-    "minimal-signal",
-    "quota-constellation",
-    "quota-orrery",
-    "terminal-ticker",
-    "tactical-edge-hud",
 ];
 
 fn is_builtin_theme_id(id: &str) -> bool {
@@ -2080,14 +2045,6 @@ impl ThemeDocument {
 
     pub fn is_builtin_classic(&self) -> bool {
         self.id == CLASSIC_THEME_ID
-    }
-
-    /// Identifies the short-lived first Studio approximation so it can be
-    /// upgraded without replacing themes users have renamed or repurposed.
-    pub fn is_obsolete_studio_starter(&self) -> bool {
-        (self.id == "classic-segments" && self.name == "Classic Segments")
-            || (self.id == "midnight-glass" && self.name == "Midnight Glass")
-            || (self.id == "classic-usage-widget" && self.name == "Classic Usage Widget")
     }
 
     pub fn starter() -> Self {

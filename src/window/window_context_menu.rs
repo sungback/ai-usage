@@ -273,8 +273,6 @@ pub(super) fn execute_context_menu_action(
         ContextMenuAction::ToggleTaskbarRingBadge => Some(IDM_TOGGLE_TASKBAR_RING_BADGE),
         ContextMenuAction::Exit => Some(2),
         ContextMenuAction::ToggleWidget
-        | ContextMenuAction::LegacyResetPosition
-        | ContextMenuAction::LegacySetLanguage { .. }
         | ContextMenuAction::ToggleLayerRender { .. }
         | ContextMenuAction::LayerActions { .. }
         | ContextMenuAction::OpenUrl { .. }

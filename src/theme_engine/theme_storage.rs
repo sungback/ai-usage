@@ -9,10 +9,6 @@ pub fn themes_directory() -> PathBuf {
     crate::app_settings::app_data_directory().join("themes")
 }
 
-pub fn assets_directory() -> PathBuf {
-    themes_directory().join("assets")
-}
-
 
 #[cfg(test)]
 pub(super) fn managed_asset_file_name(path: &str) -> Option<&str> {
@@ -161,96 +157,5 @@ pub fn ensure_starter_theme() -> Result<PathBuf, String> {
             crate::app_settings::write_json_atomic(&path, &theme)?;
         }
     }
-    ensure_bundled_editable_themes(&directory, &assets_directory())?;
-    for removed_id in REMOVED_BUILTIN_THEME_IDS {
-        let path = directory.join(format!("{removed_id}.json"));
-        match std::fs::remove_file(path) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(error.to_string()),
-        }
-    }
     Ok(directory.join(format!("{CLASSIC_THEME_ID}.json")))
-}
-
-pub(super) fn ensure_bundled_editable_themes(
-    directory: &Path,
-    asset_directory: &Path,
-) -> Result<(), String> {
-    let install_marker = directory.join(BUNDLED_EDITABLE_INSTALL_MARKER);
-    if install_marker.exists() {
-        return Ok(());
-    }
-    std::fs::create_dir_all(asset_directory).map_err(|error| error.to_string())?;
-    for (file_name, source) in BUNDLED_THEME_ASSETS {
-        let path = asset_directory.join(file_name);
-        if !path.exists() {
-            std::fs::write(path, source).map_err(|error| error.to_string())?;
-        }
-    }
-
-    for (expected_id, source) in BUNDLED_EDITABLE_THEME_SOURCES {
-        let mut bundled: ThemeDocument = serde_json::from_str(source).map_err(|error| {
-            format!("Bundled editable theme '{expected_id}' is invalid JSON: {error}")
-        })?;
-        if bundled.id != *expected_id {
-            return Err(format!(
-                "Bundled editable theme id '{}' does not match '{expected_id}'",
-                bundled.id
-            ));
-        }
-        bundled.prepare_runtime();
-        let errors = bundled.validate();
-        if !errors.is_empty() {
-            return Err(format!(
-                "Bundled editable theme '{}' is invalid:\n{}",
-                bundled.name,
-                errors.join("\n")
-            ));
-        }
-
-        let path = directory.join(format!("{expected_id}.json"));
-        if !path.exists() {
-            crate::app_settings::write_json_atomic(&path, &bundled)?;
-            continue;
-        }
-
-        // Upgrade the original locally-created Minecraft theme without
-        // replacing any other user edits. Once changed, later menu choices are
-        // preserved because only the old prototype reference is recognized.
-        let Ok(mut installed) = load_theme(&path) else {
-            continue;
-        };
-        if migrate_minecraft_context_menu(&mut installed) {
-            crate::app_settings::write_json_atomic(&path, &installed)?;
-        }
-    }
-    std::fs::write(install_marker, b"1").map_err(|error| error.to_string())?;
-    Ok(())
-}
-
-pub(super) fn migrate_minecraft_context_menu(theme: &mut ThemeDocument) -> bool {
-    if theme.id != MINECRAFT_THEME_ID {
-        return false;
-    }
-    const LEGACY_ACTION: &str = "show_context_menu(\"classic-test\")";
-    const NATIVE_MENU_ACTION: &str = "show_context_menu()";
-    fn migrate_object(object: &mut SceneObject) -> bool {
-        let mut changed = false;
-        if let Some(events) = object.mouse_events.as_mut() {
-            if events.right_click.trim() == LEGACY_ACTION {
-                events.right_click = NATIVE_MENU_ACTION.into();
-                changed = true;
-            }
-        }
-        for child in &mut object.children {
-            changed |= migrate_object(child);
-        }
-        changed
-    }
-    let mut changed = false;
-    for surface in &mut theme.surfaces {
-        changed |= migrate_object(surface);
-    }
-    changed
 }

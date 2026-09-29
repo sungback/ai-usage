@@ -82,7 +82,7 @@ mod tests {
     /// A user upgrading straight from those versions still has that file, so the
     /// document has to load even though the action can no longer be built.
     #[test]
-    fn a_menu_file_written_before_the_language_submenu_still_loads() {
+    fn removed_legacy_actions_are_rejected() {
         let legacy = r#"{
             "schema_version": 1, "id": "classic-v1", "name": "Classic v1",
             "items": [
@@ -91,8 +91,10 @@ mod tests {
                  "action":{"type":"set_language","language":"system"}}
             ]
         }"#;
+        // set_language는 제거된 옛 형식이라 파싱이 실패해야 한다. 로드 실패 시
+        // 호출자는 내장 Classic 메뉴로 떨어지므로 메뉴가 비는 일은 없다.
         let parsed = serde_json::from_str::<ContextMenuDocument>(legacy);
-        assert!(parsed.is_ok(), "구버전 메뉴 로드 실패: {:?}", parsed.err());
+        assert!(parsed.is_err(), "removed legacy actions must not parse");
     }
 
     #[test]
@@ -183,25 +185,6 @@ mod tests {
         let serialized = serde_json::to_string(&action).unwrap();
         assert!(serialized.contains(r#""seconds":300"#));
         assert!(!serialized.contains("milliseconds"));
-    }
-
-    #[test]
-    fn legacy_reset_position_actions_are_removed() {
-        let mut items = vec![
-            ContextMenuItem::action("reset-position", "Reset position", ContextMenuAction::LegacyResetPosition),
-            ContextMenuItem::submenu(
-                "legacy-settings",
-                "Settings",
-                vec![ContextMenuItem::action(
-                    "nested-reset-position",
-                    "Reset position",
-                    ContextMenuAction::LegacyResetPosition,
-                )],
-            ),
-            ContextMenuItem::action("exit", "Exit", ContextMenuAction::Exit),
-        ];
-        model::remove_legacy_context_menu_actions(&mut items);
-        assert_eq!(items, vec![ContextMenuItem::action("exit", "Exit", ContextMenuAction::Exit)]);
     }
 
     #[test]

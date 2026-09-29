@@ -814,18 +814,8 @@ fn schema_only_serializes_placement_fields_for_the_relevant_level() {
     assert!(child.get("content").is_some());
 }
 
-#[test]
-fn generated_studio_defaults_are_replaceable_but_named_user_themes_are_not() {
-    let mut theme = ThemeDocument::starter();
-    theme.id = "midnight-glass".into();
-    theme.name = "Midnight Glass".into();
-    assert!(theme.is_obsolete_studio_starter());
-    theme.name = "My Midnight Glass".into();
-    assert!(!theme.is_obsolete_studio_starter());
-}
-
-#[test]
-fn colors_support_rgb_and_rgba() {
+    #[test]
+    fn colors_support_rgb_and_rgba() {
     assert_eq!(
         parse_color("#112233"),
         Some(Rgba {
@@ -1571,9 +1561,6 @@ fn built_in_themes_are_valid_and_cannot_be_saved_as_editable_themes() {
     assert_eq!(BUILTIN_THEME_SOURCES.len(), 2);
     assert_eq!(BUILTIN_THEME_SOURCES[0].0, CLASSIC_THEME_ID);
     assert_eq!(BUILTIN_THEME_SOURCES[1].0, COMPACT_FLUENT_QUAD_THEME_ID);
-    assert!(REMOVED_BUILTIN_THEME_IDS
-        .iter()
-        .all(|id| !is_builtin_theme_id(id)));
     let mut ids = std::collections::HashSet::new();
     for (expected_id, source) in BUILTIN_THEME_SOURCES {
         let mut theme: ThemeDocument = serde_json::from_str(source).unwrap();
@@ -1674,95 +1661,8 @@ fn compact_fluent_quad_widget_respects_usage_direction() {
     }
 }
 
-#[test]
-fn bundled_minecraft_theme_is_valid_editable_and_uses_the_native_menu() {
-    assert_eq!(BUNDLED_EDITABLE_THEME_SOURCES.len(), 1);
-    let (expected_id, source) = BUNDLED_EDITABLE_THEME_SOURCES[0];
-    let mut theme: ThemeDocument = serde_json::from_str(source).unwrap();
-    assert_eq!(expected_id, MINECRAFT_THEME_ID);
-    assert_eq!(theme.id, MINECRAFT_THEME_ID);
-    assert!(!theme.is_builtin());
-    theme.prepare_runtime();
-    assert!(theme.validate().is_empty());
-    assert_eq!(
-        theme.surfaces[0]
-            .mouse_events
-            .as_ref()
-            .map(|events| events.right_click.as_str()),
-        Some("show_context_menu()")
-    );
-
-    for (file_name, bytes) in BUNDLED_THEME_ASSETS {
-        assert!(file_name.starts_with("minecraft-"));
-        assert!(image::load_from_memory(bytes).is_ok());
-        assert_eq!(theme_asset_usage(&theme, &format!("assets/{file_name}")), 1);
-    }
-}
-
-#[test]
-fn minecraft_context_menu_migration_is_targeted_and_one_time() {
-    let mut minecraft: ThemeDocument =
-        serde_json::from_str(BUNDLED_EDITABLE_THEME_SOURCES[0].1).unwrap();
-    minecraft.surfaces[0]
-        .mouse_events
-        .as_mut()
-        .unwrap()
-        .right_click = "show_context_menu(\"classic-test\")".into();
-    assert!(migrate_minecraft_context_menu(&mut minecraft));
-    assert_eq!(
-        minecraft.surfaces[0]
-            .mouse_events
-            .as_ref()
-            .unwrap()
-            .right_click,
-        "show_context_menu()"
-    );
-    assert!(!migrate_minecraft_context_menu(&mut minecraft));
-
-    minecraft.id = "user-theme".into();
-    minecraft.surfaces[0]
-        .mouse_events
-        .as_mut()
-        .unwrap()
-        .right_click = "show_context_menu(\"classic-test\")".into();
-    assert!(!migrate_minecraft_context_menu(&mut minecraft));
-}
-
-#[test]
-fn bundled_minecraft_install_preserves_user_edits() {
-    let root = std::env::temp_dir().join(format!(
-        "ai-usage-minecraft-test-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    let themes = root.join("themes");
-    let assets = themes.join("assets");
-    ensure_bundled_editable_themes(&themes, &assets).unwrap();
-
-    let theme_path = themes.join(format!("{MINECRAFT_THEME_ID}.json"));
-    let mut installed = load_theme(&theme_path).unwrap();
-    assert!(!installed.is_builtin());
-    installed.name = "My Minecraft".into();
-    crate::app_settings::write_json_atomic(&theme_path, &installed).unwrap();
-
-    ensure_bundled_editable_themes(&themes, &assets).unwrap();
-    assert_eq!(load_theme(&theme_path).unwrap().name, "My Minecraft");
-    for (file_name, _) in BUNDLED_THEME_ASSETS {
-        assert!(assets.join(file_name).is_file());
-    }
-
-    std::fs::remove_file(&theme_path).unwrap();
-    ensure_bundled_editable_themes(&themes, &assets).unwrap();
-    assert!(!theme_path.exists());
-
-    std::fs::remove_dir_all(&root).unwrap();
-}
-
-#[test]
-fn theme_deletion_is_limited_to_managed_writable_themes() {
+    #[test]
+    fn theme_deletion_is_limited_to_managed_writable_themes() {
     let managed = themes_directory().join("deletable-theme.json");
     assert!(is_managed_theme_path(&managed));
     assert!(!is_managed_theme_path(Path::new("external-theme.json")));

@@ -3,8 +3,6 @@
 use std::path::PathBuf;
 
 const LAUNCH_AGENT_LABEL: &str = "com.sungback.aiusage";
-const LEGACY_LAUNCH_AGENT_LABELS: [&str; 2] =
-    ["com.sungback.myaimonitor", "com.codezeno.claudecodeusagemonitor"];
 
 fn launch_agent_plist_path() -> Option<PathBuf> {
     dirs::home_dir().map(|home| {
@@ -14,33 +12,10 @@ fn launch_agent_plist_path() -> Option<PathBuf> {
     })
 }
 
-fn legacy_launch_agent_plist_paths() -> Vec<PathBuf> {
-    let Some(home) = dirs::home_dir() else {
-        return Vec::new();
-    };
-    LEGACY_LAUNCH_AGENT_LABELS
-        .iter()
-        .map(|label| {
-            home.join("Library")
-                .join("LaunchAgents")
-                .join(format!("{label}.plist"))
-        })
-        .collect()
-}
-
-fn remove_legacy_launch_agents() {
-    for path in legacy_launch_agent_plist_paths() {
-        let _ = std::fs::remove_file(path);
-    }
-}
-
 pub fn is_startup_enabled() -> bool {
     launch_agent_plist_path()
         .map(|path| path.exists())
         .unwrap_or(false)
-        || legacy_launch_agent_plist_paths()
-            .iter()
-            .any(|path| path.exists())
 }
 
 pub fn set_startup_enabled(enable: bool) {
@@ -78,9 +53,7 @@ pub fn set_startup_enabled(enable: bool) {
         );
 
         let _ = std::fs::write(&plist_path, plist_content);
-        remove_legacy_launch_agents();
     } else {
         let _ = std::fs::remove_file(&plist_path);
-        remove_legacy_launch_agents();
     }
 }

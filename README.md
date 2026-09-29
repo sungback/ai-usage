@@ -196,7 +196,6 @@ src/
   - macOS: `~/Library/Application Support/ai-usage/settings.json`
   - Windows: `%APPDATA%\ai-usage\settings.json`
 - **설정 파일 복구**: 설정 파일이 손상되어 파싱에 실패하면 원본은 `settings.json.corrupt-<타임스탬프>`로 보존되고, 앱은 기본값으로 시작합니다. 이 경우 로그에 경고가 남습니다.
-- **설정 디렉터리 이전**: 이전 판의 폴더 이름 `MyAIMonitor`를 쓰고 있었다면 `ai-usage`로 옮긴 뒤 재시작하십시오. 설정과 계정 정보는 자동 이관되지 않습니다. macOS 자동 실행(LaunchAgent) 라벨도 `com.sungback.aiusage`로 바뀌므로 메뉴에서 다시 켜 주십시오.
 
 ---
 
