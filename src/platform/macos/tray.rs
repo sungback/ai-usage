@@ -268,19 +268,19 @@ pub fn render_compact_menu_badge(
     data: &Option<crate::models::AppUsageData>,
     settings: &crate::app_settings::SettingsFile,
 ) -> Icon {
-    let provider = settings
-        .enabled_ordered_providers()
-        .first()
-        .copied()
-        .unwrap_or(crate::providers::ProviderId::Claude);
     let default_data = crate::models::AppUsageData::default();
     let data = data.as_ref().unwrap_or(&default_data);
-    let img = crate::platform::ring_badge::render_single_provider_ring(
-        provider,
-        data.get(provider),
-        settings,
-        44,
-    );
+    let img = match crate::platform::ring_badge::render_ring_badge_image_at_size(
+        data, settings, 44, 4,
+    ) {
+        Some(img) => img,
+        None => crate::platform::ring_badge::render_single_provider_ring(
+            crate::providers::ProviderId::Claude,
+            None,
+            settings,
+            44,
+        ),
+    };
     let (width, height) = (img.width(), img.height());
-    Icon::from_rgba(img.into_raw(), width, height).expect("single ring badge should render")
+    Icon::from_rgba(img.into_raw(), width, height).expect("menu bar badge should render")
 }

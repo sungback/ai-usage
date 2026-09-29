@@ -422,25 +422,22 @@ mod tests {
     }
 
     #[test]
-    fn test_compact_menu_badge_renders_single_44px_ring() {
+    fn test_compact_menu_badge_renders_one_ring_per_provider() {
         let mut data = AppUsageData::default();
         data.insert(ProviderId::Codex, make_usage(30.0, 50.0));
         data.insert(ProviderId::Claude, make_usage(10.0, 47.0));
+        data.insert(ProviderId::Antigravity, make_usage(0.0, 25.0));
 
         let mut settings = crate::app_settings::SettingsFile::default();
         settings.set_provider_enabled(ProviderId::Codex, true);
         settings.set_provider_enabled(ProviderId::Claude, true);
+        settings.set_provider_enabled(ProviderId::Antigravity, true);
         settings.usage_countdown = true;
 
         let _icon = render_compact_menu_badge(&Some(data.clone()), &settings);
-        let first = settings.enabled_ordered_providers().first().copied();
-        let img = render_single_provider_ring(
-            first.unwrap_or(ProviderId::Claude),
-            data.get(first.unwrap_or(ProviderId::Claude)),
-            &settings,
-            44,
-        );
-        assert_eq!(img.width(), 44);
+        let img = render_ring_badge_image_at_size(&data, &settings, 44, 4)
+            .expect("three enabled providers should render");
+        assert_eq!(img.width(), 140);
         assert_eq!(img.height(), 44);
         assert!(img.pixels().any(|p| p[3] > 0));
     }
