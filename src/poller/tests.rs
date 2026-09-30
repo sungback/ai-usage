@@ -56,8 +56,8 @@ fn idle_window_presence_survives_cached_poll_failures() {
 #[test]
 fn configured_https_transport_does_not_panic() {
     let request = std::panic::catch_unwind(|| {
-        // Port 1 should refuse immediately; reaching the connector is enough to
-        // verify that the configured TLS provider was compiled into ureq.
+        // 1번 포트는 즉시 거부되어야 합니다. 커넥터에 도달하는 것만으로도
+        // 설정된 TLS 공급자가 ureq에 컴파일되어 포함되었는지 검증하기에 충분합니다.
         let _ = build_agent()
             .expect("HTTP agent should build")
             .get("https://127.0.0.1:1")
@@ -364,7 +364,7 @@ fn one_provider_failing_does_not_blank_its_row() {
     .into_iter()
     .collect();
 
-    // Only Codex answered this cycle.
+    // 이번 주기에는 Codex만 응답함.
     let fresh: AppUsageData = [(ProviderId::Codex, usage_with_session_percent(9.0))]
         .into_iter()
         .collect();

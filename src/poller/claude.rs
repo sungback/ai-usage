@@ -23,8 +23,8 @@ struct UsageResponse {
     spend: Option<SpendResponse>,
 }
 
-/// Paid credits that carry the account past its plan limits. Amounts are
-/// minor units with their own exponent, so the currency is self-describing.
+/// 플랜 한도를 초과했을 때 계정을 유지해 주는 유료 크레딧입니다.
+/// 금액은 고유한 지수(exponent)를 갖는 마이너 단위(minor unit, 예: 센트)이므로 통화가 자체 기술됩니다.
 #[derive(Deserialize)]
 struct SpendResponse {
     #[serde(default)]
@@ -61,9 +61,8 @@ struct Credentials {
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum CredentialSource {
     Windows(PathBuf),
-    /// The Claude desktop app's own token cache, used when Claude Code has
-    /// only ever run inside the desktop app and no CLI login wrote
-    /// `~/.claude/.credentials.json`.
+    /// Claude 데스크톱 앱 자체의 토큰 캐시입니다. Claude Code가 데스크톱 앱 내에서만
+    /// 실행되었고 CLI 로그인이 `~/.claude/.credentials.json`을 작성하지 않은 경우에 사용됩니다.
     DesktopApp(PathBuf),
     Wsl {
         distro: String,
@@ -84,15 +83,14 @@ pub(super) fn poll_claude_code() -> Result<UsageData, PollError> {
     fetch_usage_with_fallback(&creds.access_token)
 }
 
-/// Explicit profiles are pinned to one source, including when refresh fails.
+/// 명시적 프로필은 토큰 갱신이 실패하더라도 하나의 소스에 고정(pin)됩니다.
 ///
-/// The one exception is a profile sitting on the default CLI path. That path
-/// is where the desktop app's Claude Code build would have logged in too, and
-/// the desktop app can leave `.credentials.json` present but tokenless once it
-/// takes the login over. Treating "no token there" as the end of the search
-/// hides a perfectly good desktop token, so the default path — and only the
-/// default path — falls through to the desktop app. A custom export stays
-/// pinned, so a multi-account setup can never borrow another account's token.
+/// 유일한 예외는 기본 CLI 경로에 위치한 프로필입니다. 해당 경로는 데스크톱 앱의
+/// Claude Code 빌드가 로그인하는 위치이기도 하며, 데스크톱 앱이 로그인을 인계받으면
+/// `.credentials.json` 파일은 존재하지만 토큰이 비어 있는 상태가 될 수 있습니다.
+/// 여기서 "토큰 없음"을 탐색의 끝으로 취급하면 유효한 데스크톱 토큰을 놓치게 되므로,
+/// 기본 경로(오직 기본 경로만)는 데스크톱 앱으로 폴스루(fall through)됩니다.
+/// 커스텀 내보내기 경로는 고정 상태를 유지하므로, 다중 계정 설정에서 다른 계정의 토큰을 빌려오는 일은 없습니다.
 pub(super) fn poll_account(path: &Path) -> Result<UsageData, PollError> {
     let is_default = crate::accounts::default_credential_path(crate::providers::ProviderId::Claude)
         .map(|default| {
@@ -126,7 +124,7 @@ pub(super) fn poll_account(path: &Path) -> Result<UsageData, PollError> {
             }
         };
 
-    // Refresh against whichever source actually produced the token.
+    // 실제로 토큰을 생성한 소스를 대상으로 갱신을 진행합니다.
     let source = credentials.source.clone();
     if is_token_expired(credentials.expires_at) {
         cli_refresh_token(&source);
@@ -138,8 +136,7 @@ pub(super) fn poll_account(path: &Path) -> Result<UsageData, PollError> {
     fetch_usage_with_fallback(&credentials.access_token)
 }
 
-/// The desktop app's token, but only for a profile that points at the default
-/// CLI credentials path.
+/// 기본 CLI 자격 증명 경로를 가리키는 프로필에 한해 데스크톱 앱의 토큰을 가져옵니다.
 fn desktop_credentials_for_default_path(path: &Path) -> Option<Credentials> {
     let credentials = read_desktop_app_credentials(&desktop_fallback_path(path)?)?;
     Some(credentials)
@@ -154,8 +151,8 @@ fn desktop_fallback_path(path: &Path) -> Option<PathBuf> {
 }
 
 fn desktop_fallback_allowed(path: &Path, default: &Path, explicit_directory: bool) -> bool {
-    // default_credential_path also honors CLAUDE_CONFIG_DIR. That is an
-    // explicit account selection, not permission to use the desktop login.
+    // default_credential_path는 CLAUDE_CONFIG_DIR도 반영합니다. 이는
+    // 명시적인 계정 선택이며, 데스크톱 로그인을 사용해도 된다는 권한이 아닙니다.
     !explicit_directory && crate::accounts::source_key(path) == crate::accounts::source_key(default)
 }
 
@@ -166,8 +163,8 @@ pub(super) fn account_watch_signature(path: &Path) -> String {
 fn account_watch_signature_with_desktop(path: &Path, desktop: Option<&Path>) -> String {
     let signature = crate::accounts::file_signature(path);
     match desktop {
-        // A default-path profile may read either file. Watch both so a desktop
-        // login/rotation resumes a paused account and invalidates stale usage.
+        // 기본 경로 프로필은 두 파일 중 하나를 읽을 수 있습니다. 데스크톱 로그인/교체가
+        // 일시 정지된 계정을 재개하고 오래된 사용량을 무효화할 수 있도록 둘 다 감시합니다.
         Some(desktop) => crate::accounts::fingerprint(&format!(
             "{signature}|{}",
             claude_desktop::watch_signature(desktop)
@@ -177,9 +174,9 @@ fn account_watch_signature_with_desktop(path: &Path, desktop: Option<&Path>) -> 
 }
 
 pub(super) fn fetch_usage_with_fallback(token: &str) -> Result<UsageData, PollError> {
-    // Try the dedicated usage endpoint first
+    // 전용 사용량 엔드포인트를 먼저 시도합니다.
     if let Some(data) = try_usage_endpoint(token)? {
-        // If reset timers are missing, fill them in from the Messages API
+        // 리셋 타이머가 누락된 경우 Messages API를 통해 채웁니다.
         if data.session.resets_at.is_none() || data.weekly.resets_at.is_none() {
             if let Ok(fallback) = fetch_usage_via_messages(token) {
                 let mut merged = data;
@@ -197,7 +194,7 @@ pub(super) fn fetch_usage_with_fallback(token: &str) -> Result<UsageData, PollEr
         return Ok(data);
     }
 
-    // Fall back to Messages API with rate limit headers
+    // 속도 제한 헤더가 포함된 Messages API로 폴백합니다.
     fetch_usage_via_messages(token)
 }
 
@@ -254,18 +251,16 @@ fn usage_from_response(response: UsageResponse) -> UsageData {
     data
 }
 
-/// What a failed call to the usage endpoint actually tells us.
+/// 사용량 엔드포인트 호출 실패 시 실패 원인의 분류입니다.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum UsageEndpointFailure {
-    /// The credentials were rejected.
+    /// 자격 증명이 거부되었습니다.
     Auth,
-    /// Rate limited, a server-side fault, or the network. Retrying later is
-    /// the right move. Asking the Messages API instead would spend real quota
-    /// on a request whose only purpose is to read headers, and during a rate
-    /// limit it would add to the load that caused it.
+    /// 속도 제한(Rate limited), 서버 오류 또는 네트워크 장애입니다. 나중에 재시도하는 것이
+    /// 올바른 대처입니다. Messages API로 대신 요청하면 헤더만 읽으려는 목적임에도
+    /// 실제 쿼터를 소비하게 되며, 속도 제한 중에는 부하를 더욱 가중시킵니다.
     Transient,
-    /// The endpoint is not usable on this account, which is what the Messages
-    /// API fallback exists for.
+    /// 해당 계정에서는 이 엔드포인트를 사용할 수 없습니다. Messages API 폴백이 존재하는 이유입니다.
     Unsupported,
 }
 
@@ -286,11 +281,10 @@ fn usage_request_error(error: &ureq::Error) -> PollError {
     }
 }
 
-/// Unlike Codex, the plan states its own ceiling, so the gauge needs no
-/// history: `used` is already the spend against the current cap, and a
-/// non-zero figure is the same "credits are in play" observation that the
-/// Codex balance gives by falling. Accounts with extra usage switched off
-/// report it disabled and get no gauge rather than an empty one.
+/// Codex와 달리 플랜 자체에 상한선이 명시되어 있으므로 게이지에 이전 기록(history)이 필요하지 않습니다.
+/// `used`는 현재 한도에 대한 실제 사용액이며, 0이 아닌 값은 Codex 잔액이 줄어드는 것과 마찬가지로
+/// "크레딧이 사용 중"임을 나타냅니다. 추가 사용량(extra usage)이 꺼진 계정은
+/// 비활성화된 것으로 보고되며, 빈 게이지 대신 게이지 자체가 표시되지 않습니다.
 fn claude_credits(spend: &SpendResponse, data: &UsageData) -> Option<CreditsSection> {
     let used = spend.used.as_ref()?.major();
     let total = spend.limit.as_ref()?.major();
@@ -298,8 +292,7 @@ fn claude_credits(spend: &SpendResponse, data: &UsageData) -> Option<CreditsSect
         return None;
     }
 
-    // Hold the ordinary windows until one of them is spent and credits have
-    // started covering the overflow.
+    // 일반 윈도우 중 하나가 모두 소진되어 크레딧이 초과분을 감당하기 시작할 때까지 게이지 표시를 보류합니다.
     let limit_reached = data.session.percentage >= 100.0 || data.weekly.percentage >= 100.0;
     if !limit_reached || used <= 0.0 {
         return None;
@@ -414,8 +407,8 @@ pub(super) fn parse_rate_limit_headers(response: &HttpResponse) -> UsageData {
 
         if data.session.resets_at.is_none() && overall_reset.is_some() {
             data.session.resets_at = unix_to_system_time(overall_reset);
-            // Retain the legacy reset binding, but a shared reset alone does
-            // not establish that the five-hour window exists.
+            // 기존 리셋 바인딩을 유지하되, 공유 리셋만으로는
+            // 5시간 윈도우가 존재한다고 단정할 수 없습니다.
         }
     }
 
@@ -446,8 +439,8 @@ fn refresh_credentials(credentials: Credentials) -> Result<Credentials, PollErro
     }
     let source = credentials.source;
     cli_refresh_token(&source);
-    // An expired login is still a selected account. Do not replace it with
-    // another account found in Desktop or WSL when its refresh fails.
+    // 만료된 로그인은 여전히 선택된 계정입니다. 갱신에 실패하더라도
+    // Desktop이나 WSL에서 발견된 다른 계정으로 대체하지 않습니다.
     read_credentials_from_source(&source)
         .filter(|credentials| !is_token_expired(credentials.expires_at))
         .ok_or(PollError::TokenExpired)
@@ -456,7 +449,7 @@ fn refresh_credentials(credentials: Credentials) -> Result<Credentials, PollErro
 fn cli_refresh_token(source: &CredentialSource) {
     match source {
         CredentialSource::Windows(path) => {
-            // The CLI only owns this filename. A custom export is read-only.
+            // CLI는 이 파일명만 직접 관리합니다. 커스텀 내보내기 파일은 읽기 전용입니다.
             if path
                 .file_name()
                 .is_some_and(|name| name == ".credentials.json")
@@ -466,8 +459,8 @@ fn cli_refresh_token(source: &CredentialSource) {
                 }
             }
         }
-        // The desktop app owns this token and refreshes it itself, so there is
-        // nothing to drive from here; re-reading the cache is the whole retry.
+        // 데스크톱 앱이 이 토큰을 소유하고 스스로 갱신하므로, 여기서 직접 제어할 작업은 없습니다.
+        // 캐시를 다시 읽는 것 자체가 전체 재시도 과정입니다.
         CredentialSource::DesktopApp(_) => {}
         CredentialSource::Wsl { distro } => cli_refresh_wsl_token(distro),
         CredentialSource::Keychain(_) => {
@@ -583,9 +576,8 @@ fn resolve_windows_claude_path() -> String {
     "claude.cmd".to_string()
 }
 
-/// The desktop app ships its own Claude Code build under
-/// `%APPDATA%\Claude\claude-code\<version>\claude.exe`, which is the only
-/// Claude binary present when the standalone CLI was never installed.
+/// 데스크톱 앱은 `%APPDATA%\Claude\claude-code\<version>\claude.exe` 경로에 자체 Claude Code 빌드를
+/// 함께 제공하며, 독립 실행형 CLI를 설치한 적이 없을 때 존재하는 유일한 Claude 바이너리입니다.
 #[cfg_attr(not(windows), allow(dead_code))]
 fn bundled_desktop_claude_path() -> Option<PathBuf> {
     let versions = dirs::config_dir()?.join("Claude").join("claude-code");
@@ -595,7 +587,7 @@ fn bundled_desktop_claude_path() -> Option<PathBuf> {
         .map(|entry| entry.path().join("claude.exe"))
         .filter(|path| path.is_file())
         .collect();
-    // Directory order is not version order; the newest install wins.
+    // 디렉터리 순서가 버전 순서와 일치하지 않으므로 가장 최신 설치본을 선택합니다.
     candidates.sort_by(|left, right| {
         bundled_claude_version(left)
             .cmp(&bundled_claude_version(right))
@@ -709,8 +701,8 @@ fn parse_credentials(content: &str, source: CredentialSource) -> Option<Credenti
     })
 }
 
-/// Credential sources, cheapest first. The WSL probe stays lazy so a machine
-/// that resolves a token locally never has to spawn `wsl.exe`.
+/// 자격 증명 소스를 비용이 적게 드는 순서대로 탐색합니다. WSL 검사는 지연(lazy) 실행되므로,
+/// 로컬에서 토큰을 찾은 기기에서는 `wsl.exe`를 실행할 필요가 없습니다.
 fn credential_sources_in_order() -> impl Iterator<Item = CredentialSource> {
     let explicit = std::env::var_os("CLAUDE_CONFIG_DIR").is_some_and(|value| !value.is_empty());
     let keychain = if !explicit && cfg!(target_os = "macos") {
@@ -907,8 +899,8 @@ mod tests {
     use super::*;
     use std::path::Path;
 
-    /// A default-path profile may read either file, so rotating the desktop
-    /// token cache must move the watch signature on its own.
+    /// 기본 경로 프로필은 두 파일 중 하나를 읽을 수 있으므로, 데스크톱 토큰 캐시의
+    /// 교체만으로도 감시 시그니처가 변경되어야 합니다.
     #[test]
     fn the_watch_signature_tracks_the_desktop_token_cache_too() {
         let directory = std::env::temp_dir().join(format!(
@@ -925,8 +917,8 @@ mod tests {
         let missing = directory.join("absent.json");
         std::fs::write(&cli, "cli fixture").unwrap();
 
-        // Without a desktop fallback the signature depends on the CLI file only,
-        // so it must not move when the desktop cache is created or rotated.
+        // 데스크톱 폴백이 없으면 시그니처는 CLI 파일에만 의존하므로,
+        // 데스크톱 캐시가 생성되거나 교체되어도 변경되지 않아야 합니다.
         let cli_only = account_watch_signature_with_desktop(&cli, None);
         std::fs::write(&desktop, "{}").unwrap();
         let empty_desktop = account_watch_signature_with_desktop(&cli, Some(&desktop));
@@ -980,9 +972,9 @@ mod tests {
         }
     }
 
-    /// Ignored by default: proves the default profile resolves usage on a
-    /// machine where only the desktop app holds a token. Run it with
-    /// `cargo test -- --ignored` while signed in to the desktop app.
+    /// 기본적으로 무시됨(ignored): 데스크톱 앱에만 토큰이 있는 기기에서 기본 프로필이
+    /// 사용량을 정상 조회하는지 검증합니다. 데스크톱 앱에 로그인된 상태에서
+    /// `cargo test -- --ignored`로 실행하세요.
     #[test]
     #[ignore = "requires a signed-in Claude desktop app on this machine"]
     fn the_default_profile_resolves_usage_from_the_desktop_app() {
@@ -997,9 +989,8 @@ mod tests {
 
     #[test]
     fn a_custom_export_never_falls_back_to_the_desktop_app() {
-        // The desktop fallback is scoped to the default CLI path. A profile
-        // pointing somewhere else must stay pinned even on this machine,
-        // where the desktop app does have a usable token.
+        // 데스크톱 폴백 범위는 기본 CLI 경로로 제한됩니다. 다른 위치를 가리키는
+        // 프로필은 데스크톱 앱에 사용 가능한 토큰이 있더라도 해당 파일에 고정되어야 합니다.
         let path = std::env::temp_dir().join("claude-custom-export.json");
         assert!(desktop_credentials_for_default_path(&path).is_none());
     }
@@ -1010,7 +1001,7 @@ mod tests {
         let custom = Path::new("C:/claude-fallback-test/work/.credentials.json");
         assert!(desktop_fallback_allowed(native, native, false));
         assert!(!desktop_fallback_allowed(custom, native, false));
-        // The environment-selected path is also returned as the "default".
+        // 환경 변수로 선택된 경로 역시 "기본(default)"으로 반환됩니다.
         assert!(!desktop_fallback_allowed(custom, custom, true));
         assert!(!desktop_fallback_allowed(native, native, true));
     }
@@ -1028,7 +1019,7 @@ mod tests {
         std::fs::create_dir(&directory).unwrap();
         let native = directory.join(".credentials.json");
         let desktop = directory.join("config.json");
-        // A tokenless CLI file remains unchanged throughout desktop login.
+        // 토큰이 없는 CLI 파일은 데스크톱 로그인 동안에도 변경되지 않고 유지됩니다.
         std::fs::write(&native, r#"{"claudeAiOauth":{"accessToken":""}}"#).unwrap();
         let pinned = account_watch_signature_with_desktop(&native, None);
         assert_eq!(pinned, crate::accounts::file_signature(&native));
@@ -1169,8 +1160,8 @@ mod tests {
 
     #[test]
     fn rate_limits_and_server_faults_do_not_trigger_the_messages_fallback() {
-        // Spending quota on a Messages request is the wrong answer to being
-        // rate limited, and it feeds the condition that caused it.
+        // 속도 제한에 걸렸을 때 Messages API로 쿼터를 쓰는 것은 잘못된 대처이며
+        // 오히려 원인이 된 과부하를 가중시킵니다.
         assert_eq!(
             classify_usage_failure(&status_error(429)),
             UsageEndpointFailure::Transient
@@ -1195,7 +1186,7 @@ mod tests {
             classify_usage_failure(&status_error(403)),
             UsageEndpointFailure::Auth
         );
-        // A 404 is the case the Messages API fallback exists to cover.
+        // 404 상태 코드는 Messages API 폴백이 대응하도록 설계된 경우입니다.
         assert_eq!(
             classify_usage_failure(&status_error(404)),
             UsageEndpointFailure::Unsupported
@@ -1204,7 +1195,7 @@ mod tests {
 
     #[test]
     fn spend_becomes_a_credit_gauge_against_the_plan_cap() {
-        // Shape taken from a live /api/oauth/usage response.
+        // 실제 /api/oauth/usage 응답 형태를 기반으로 한 픽스처입니다.
         let data = usage_from_json(
             r#"{
                 "seven_day": {"utilization": 100.0, "resets_at": null},
@@ -1251,15 +1242,15 @@ mod tests {
         let spend = r#""spend": {"used": {"amount_minor": 1359, "exponent": 2},
                                  "limit": {"amount_minor": 5000, "exponent": 2}, "enabled": true}"#;
 
-        // Room left in both windows, so the bars stay on the ordinary limits.
+        // 두 윈도우 모두 여유가 있으므로 게이지는 일반 한도 상태를 유지합니다.
         let json = format!(r#"{{"five_hour": {{"utilization": 40.0}}, {spend}}}"#);
         assert!(usage_from_json(&json).credits.is_none());
 
-        // A spent five-hour window is enough; it need not be the weekly one.
+        // 5시간 윈도우 소진만으로 충분하며, 주간 윈도우까지 소진될 필요는 없습니다.
         let json = format!(r#"{{"five_hour": {{"utilization": 100.0}}, {spend}}}"#);
         assert!(usage_from_json(&json).credits.is_some());
 
-        // Spent window, but nothing charged to credits yet.
+        // 윈도우는 소진되었으나 아직 크레딧 청구는 시작되지 않은 상태입니다.
         let json = r#"{"five_hour": {"utilization": 100.0},
                        "spend": {"used": {"amount_minor": 0, "exponent": 2},
                                  "limit": {"amount_minor": 5000, "exponent": 2},

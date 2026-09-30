@@ -41,23 +41,21 @@ struct AntigravityTokenData {
     id_token: Option<String>,
 }
 
-/// Google's "installed application" OAuth client for the Antigravity app itself, not a
-/// credential this project owns. It is used only to exchange a refresh token that
-/// Antigravity already stored, and only once an hour when the stored access token
-/// expires.
+/// 이 프로젝트가 소유한 자격 증명이 아니라 Antigravity 앱 자체의 Google "설치된 애플리케이션" OAuth 클라이언트입니다.
+/// Antigravity가 이미 저장해 둔 리프레시 토큰을 교환할 때만 사용되며, 저장된 액세스 토큰이
+/// 만료되는 1시간마다 한 번씩만 호출됩니다.
 ///
-/// The values are read from the Antigravity installation on this machine rather than
-/// committed here: shipping a live `GOCSPX-` secret in a public repository both leaks it
-/// and breaks every user the moment Google rotates the client. `option_env!` still wins,
-/// so a machine-local override still works.
+/// 이 값들은 공개 저장소에 직접 커밋하지 않고 로컬 기기의 Antigravity 설치본에서 읽어옵니다.
+/// 공개 저장소에 실제 `GOCSPX-` 시크릿을 포함해 배포하면 유출될 뿐만 아니라, Google이 클라이언트를 교체하는 순간
+/// 모든 사용자의 연동이 깨지기 때문입니다. `option_env!`가 우선하므로 로컬 환경 변수 오버라이드도 가능합니다.
 const CONFIGURED_CLIENT_ID: Option<&str> = option_env!("ANTIGRAVITY_CLIENT_ID");
 const CONFIGURED_CLIENT_SECRET: Option<&str> = option_env!("ANTIGRAVITY_CLIENT_SECRET");
 
 const CLIENT_ID_SUFFIX: &[u8] = b".apps.googleusercontent.com";
 const CLIENT_SECRET_PREFIX: &[u8] = b"GOCSPX-";
-/// Both clients Antigravity currently ships use a 28 character secret. A Go binary
-/// concatenates string literals, so a `GOCSPX-` run bleeds into the literal after it and
-/// cannot be bounded by a delimiter the way the quoted form in `main.js` can.
+/// 현재 Antigravity에 포함된 두 클라이언트 모두 28자 시크릿을 사용합니다. Go 바이너리는
+/// 문자열 리터럴을 연속 연결하므로, `GOCSPX-` 뒤의 문자열이 다음 리터럴과 이어져서
+/// `main.js`의 따옴표 형식처럼 구분자로 경계를 나눌 수 없습니다.
 const CLIENT_SECRET_LENGTH: usize = 28;
 
 fn find_bytes(haystack: &[u8], needle: &[u8], from: usize) -> Option<usize> {
@@ -70,11 +68,11 @@ fn find_bytes(haystack: &[u8], needle: &[u8], from: usize) -> Option<usize> {
         .map(|offset| from + offset)
 }
 
-/// Returns the client secret that follows `client_id` in an Antigravity payload.
+/// Antigravity 페이로드에서 `client_id` 뒤에 오는 클라이언트 시크릿을 반환합니다.
 ///
-/// Anchoring on the client id is what makes this safe: the installed files carry more than
-/// one client, so picking the first `GOCSPX-` in the file would pair the wrong secret with
-/// the wrong id and Google would reject it as `invalid_client`.
+/// 클라이언트 ID를 기준점(anchor)으로 삼아야 안전합니다. 설치된 파일에는 둘 이상의 클라이언트가
+/// 포함되어 있으므로 파일의 첫 번째 `GOCSPX-`를 무작정 가져오면 잘못된 ID와 시크릿이 짝지어져
+/// Google에서 `invalid_client` 에러로 거부합니다.
 fn extract_client_secret(payload: &[u8], client_id: &str) -> Option<String> {
     let anchor = find_bytes(payload, client_id.as_bytes(), 0)?;
     let secret_start = find_bytes(payload, CLIENT_SECRET_PREFIX, anchor + client_id.len())?;
@@ -90,7 +88,7 @@ fn extract_client_secret(payload: &[u8], client_id: &str) -> Option<String> {
     {
         return None;
     }
-    // The `GOCSPX-` prefix is part of the value: Google rejects the exchange without it.
+    // `GOCSPX-` 접두사도 시크릿 값의 일부입니다. 이것이 없으면 Google이 교환을 거부합니다.
     Some(format!(
         "{}{}",
         String::from_utf8_lossy(CLIENT_SECRET_PREFIX),
@@ -98,11 +96,11 @@ fn extract_client_secret(payload: &[u8], client_id: &str) -> Option<String> {
     ))
 }
 
-/// Files that carry the Antigravity OAuth client, best candidate first.
+/// Antigravity OAuth 클라이언트가 포함된 파일 목록 (우선순위 순).
 ///
-/// The IDE bundle is preferred: it is what writes the keychain entry this poller reads, so
-/// whenever polling is possible at all it is installed, and its bundled JavaScript keeps
-/// the id and secret in adjacent quoted literals. `agy` is the CLI, which is optional.
+/// IDE 번들을 가장 선호합니다. 이 폴러가 읽는 키체인 항목을 작성한 주체이므로
+/// 폴링이 가능한 환경이라면 항상 설치되어 있으며, 번들된 자바스크립트는 ID와 시크릿을
+/// 인접한 따옴표 리터럴로 유지합니다. `agy`는 CLI 도구이며 선택 사항입니다.
 fn oauth_client_source_files() -> Vec<std::path::PathBuf> {
     #[cfg(target_os = "macos")]
     let mut candidates = vec![
@@ -117,7 +115,7 @@ fn oauth_client_source_files() -> Vec<std::path::PathBuf> {
         let local = std::env::var_os("LOCALAPPDATA").map(std::path::PathBuf::from);
         let mut paths = Vec::new();
         if let Some(local) = local {
-            // VS Code derived Electron layout: resources/, not Contents/Resources/.
+            // VS Code 기반 Electron 레이아웃: Contents/Resources/가 아니라 resources/입니다.
             for root in ["Programs/Antigravity IDE", "Programs/Antigravity"] {
                 paths.push(local.join(root).join("resources/app/out/main.js"));
             }
@@ -176,8 +174,7 @@ fn jwt_claim(token: &str, claim: &str) -> Option<String> {
         .map(str::to_owned)
 }
 
-/// Resolves the OAuth client id: an explicit build-time override, then the audience of the
-/// token Antigravity stored, then a client id discovered in the local installation.
+/// OAuth 클라이언트 ID를 확인합니다: 명시적 빌드 타임 오버라이드 -> Antigravity가 저장한 토큰의 aud 클레임 -> 로컬 설치본에서 검색된 클라이언트 ID 순입니다.
 fn oauth_client_id(id_token: Option<&str>) -> String {
     if let Some(configured) = CONFIGURED_CLIENT_ID {
         return configured.to_owned();
@@ -200,9 +197,9 @@ fn discover_client_id() -> Option<String> {
     None
 }
 
-/// Best-effort last resort, used only when there is neither a build-time override nor an
-/// `aud` claim. The installed files hold more than one client, so this may pick either; the
-/// token exchange will fail loudly rather than silently if it guesses wrong.
+/// 빌드 타임 오버라이드도 없고 `aud` 클레임도 없을 때 사용하는 최후의 수단(best-effort)입니다.
+/// 설치 파일에는 여러 클라이언트가 있어 둘 중 하나를 선택할 수 있으며, 추측이 틀리면
+/// 조용히 무시되는 대신 명확하게 토큰 교환 실패 에러가 발생합니다.
 fn extract_first_client_id(payload: &[u8]) -> Option<String> {
     let suffix_at = payload
         .windows(CLIENT_ID_SUFFIX.len())
@@ -359,8 +356,8 @@ pub(super) fn poll_antigravity() -> Result<UsageData, PollError> {
         }
     };
 
-    // 1. If we have a cached access token for the same refresh token, try it first
-    // to avoid the 401 round-trip when the keychain/credential-manager token has expired.
+    // 1. 동일한 리프레시 토큰에 대한 캐시된 액세스 토큰이 있다면 먼저 시도하여,
+    // 키체인/자격 증명 관리자의 토큰이 만료되었을 때 발생하는 401 왕복 지연을 방지합니다.
     let cached_token = {
         let lock = CACHED_ACCESS_TOKEN
             .lock()
@@ -391,13 +388,13 @@ pub(super) fn poll_antigravity() -> Result<UsageData, PollError> {
         }
     }
 
-    // 2. Try the credential's own access token
+    // 2. 자격 증명 자체의 액세스 토큰을 시도합니다.
     match fetch_antigravity_usage(&creds.access_token) {
         Ok(data) => Ok(data),
         Err(PollError::AuthRequired) => {
             if let Some(ref rf) = creds.refresh_token {
                 let new_token = refresh_antigravity_token(rf, creds.id_token.as_deref())?;
-                // Cache the fresh token in memory so subsequent polls use it directly
+                // 이후 폴링에서 바로 사용할 수 있도록 새로운 토큰을 메모리에 캐시합니다.
                 {
                     let mut lock = CACHED_ACCESS_TOKEN
                         .lock()
@@ -781,7 +778,7 @@ fn read_antigravity_credentials() -> Option<AntigravityTokenData> {
 fn read_antigravity_credentials() -> Option<AntigravityTokenData> {
     #[cfg(target_os = "macos")]
     {
-        // 1. Try modern Antigravity IDE keychain target (-s "gemini" -a "antigravity")
+        // 1. 최신 Antigravity IDE 키체인 타깃 시도 (-s "gemini" -a "antigravity")
         if let Ok(output) = std::process::Command::new("security")
             .args(["find-generic-password", "-s", "gemini", "-a", "antigravity", "-w"])
             .output()
@@ -794,7 +791,7 @@ fn read_antigravity_credentials() -> Option<AntigravityTokenData> {
             }
         }
 
-        // 2. Fallback legacy target (-s "gemini:antigravity")
+        // 2. 레거시 타깃으로 폴백 (-s "gemini:antigravity")
         if let Ok(output) = std::process::Command::new("security")
             .args(["find-generic-password", "-s", ANTIGRAVITY_CREDENTIAL_TARGET, "-w"])
             .output()
@@ -841,9 +838,8 @@ fn read_windows_generic_credential(target: &str) -> Option<String> {
 mod tests {
     use super::*;
 
-    /// Ignored by default: this hits the live Antigravity API and only
-    /// passes on a machine that is signed in. Run it with
-    /// `cargo test -- --ignored` while signed in to Antigravity.
+    /// 기본적으로 무시됨(ignored): 실제 Antigravity API를 호출하며 로그인된 기기에서만
+    /// 통과합니다. Antigravity에 로그인된 상태에서 `cargo test -- --ignored`로 실행하세요.
     #[test]
     #[ignore = "requires a signed-in Antigravity account and network access"]
     fn test_poll_antigravity_live() {
@@ -916,7 +912,7 @@ mod tests {
             });
         }
 
-        // Same refresh token should find cached access token
+        // 동일한 리프레시 토큰은 캐시된 액세스 토큰을 찾아야 함
         {
             let lock = CACHED_ACCESS_TOKEN.lock().unwrap();
             let found = lock.as_ref().and_then(|c| {
@@ -929,7 +925,7 @@ mod tests {
             assert_eq!(found.as_deref(), Some("access_A"));
         }
 
-        // Different refresh token should ignore stale cache
+        // 다른 리프레시 토큰은 오래된 캐시를 무시해야 함
         {
             let lock = CACHED_ACCESS_TOKEN.lock().unwrap();
             let found = lock.as_ref().and_then(|c| {
@@ -942,7 +938,7 @@ mod tests {
             assert_eq!(found, None);
         }
 
-        // Clean up
+        // 정리(Clean up)
         {
             let mut lock = CACHED_ACCESS_TOKEN.lock().unwrap();
             *lock = None;
@@ -1025,8 +1021,8 @@ mod tests {
         }
     }
 
-    // Deliberately not shaped like a real client id, so this fixture cannot trip the same
-    // secret scanner that removed the previously hardcoded values.
+    // 이전에 하드코딩된 값을 걸러냈던 시크릿 스캐너에 걸리지 않도록,
+    // 의도적으로 실제 클라이언트 ID와 다른 형태로 만든 픽스처입니다.
     #[test]
     #[ignore = "requires a local Antigravity installation"]
     fn the_client_is_discovered_from_the_local_antigravity_install() {
@@ -1039,9 +1035,9 @@ mod tests {
         assert_eq!(secret.len(), CLIENT_SECRET_PREFIX.len() + CLIENT_SECRET_LENGTH);
     }
 
-    /// GitHub push protection matches Google OAuth client id patterns textually, so
-    /// synthetic ids are assembled here instead of being written out beside the suffix.
-    /// None of these is a credential; they only have to look like one to the parser.
+    /// GitHub 푸시 보호(push protection)가 Google OAuth 클라이언트 ID 패턴을 텍스트로 감지하므로,
+    /// 접미사 옆에 전체 문자열을 적지 않고 여기서 가상 ID를 조립합니다.
+    /// 실제 자격 증명이 아니며, 파서 관점에서 자격 증명처럼 보이기만 하면 됩니다.
     fn client_id(tag: &str) -> String {
         format!("{tag}{}", String::from_utf8_lossy(CLIENT_ID_SUFFIX))
     }
@@ -1090,7 +1086,7 @@ mod tests {
 
     #[test]
     fn a_go_literal_run_past_the_secret_is_truncated_to_the_known_length() {
-        // Go concatenates string literals, so the real bytes read GOCSPX-<secret>decoding.
+        // Go는 문자열 리터럴을 연결하므로 실제 바이트는 GOCSPX-<secret>decoding 형태가 됩니다.
         let id = sample_id();
         let mut payload = id.as_bytes().to_vec();
         payload.extend_from_slice(SAMPLE_SECRET.as_bytes());

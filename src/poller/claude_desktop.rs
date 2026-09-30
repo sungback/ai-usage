@@ -1,15 +1,13 @@
-//! Reads the OAuth token that the Claude desktop app keeps for its bundled
-//! Claude Code build.
+//! Claude 데스크톱 앱이 번들된 Claude Code 빌드를 위해 보관하는 OAuth 토큰을 읽습니다.
 //!
-//! Machines that only ever ran Claude Code through the desktop app have no
-//! `~/.claude/.credentials.json`, because that file is written by the
-//! standalone CLI login flow. The desktop app is an Electron application and
-//! stores its token cache with Chromium's OSCrypt scheme instead: an
-//! AES-256-GCM key sits DPAPI-wrapped in `Local State`, and each encrypted
-//! value is `"v10" || nonce || ciphertext || tag`.
+//! 데스크톱 앱을 통해서만 Claude Code를 실행했던 기기에는 `~/.claude/.credentials.json` 파일이 없습니다.
+//! 해당 파일은 독립 실행형 CLI 로그인 과정에서만 생성되기 때문입니다.
+//! 데스크톱 앱은 Electron 애플리케이션으로, 대신 Chromium의 OSCrypt 방식을 사용하여 토큰 캐시를 저장합니다.
+//! `Local State` 파일 내에 DPAPI로 래핑된 AES-256-GCM 키가 들어있고,
+//! 각 암호화된 값은 `"v10" || nonce || ciphertext || tag` 형태를 가집니다.
 //!
-//! Everything here is read-only, runs as the signed-in user, and degrades to
-//! `None` whenever the layout is not what we expect.
+//! 여기에 있는 모든 작업은 읽기 전용이며, 로그인한 사용자의 권한으로 실행되고,
+//! 레이아웃이 예상과 다를 경우 안전하게 `None`으로 대체됩니다.
 
 #![cfg_attr(not(windows), allow(dead_code))]
 
@@ -17,16 +15,15 @@
 use std::ffi::c_void;
 use std::path::{Path, PathBuf};
 
-/// Newest layout first. The desktop app migrated its cache to
-/// `oauth:tokenCacheV2` and leaves the older `oauth:tokenCache` key in place,
-/// so both are tried and the first that yields a usable token wins.
+/// 최신 레이아웃 우선. 데스크톱 앱이 캐시를 `oauth:tokenCacheV2`로 마이그레이션하면서
+/// 기존의 `oauth:tokenCache` 키도 그대로 남겨두었으므로, 둘 다 시도하여 사용 가능한 토큰을 먼저 반환하는 쪽을 사용합니다.
 const TOKEN_CACHE_KEYS: &[&str] = &["oauth:tokenCacheV2", "oauth:tokenCache"];
 const DPAPI_KEY_PREFIX: &[u8] = b"DPAPI";
 const OS_CRYPT_PREFIX: &[u8] = b"v10";
 const GCM_NONCE_LEN: usize = 12;
 const GCM_TAG_LEN: usize = 16;
-/// Desktop entries are keyed `"<install>:<user>:<base url>:<scopes>"`; the
-/// inference scope marks the token the usage endpoint accepts.
+/// 데스크톱 항목 키 형식은 `"<install>:<user>:<base url>:<scopes>"`입니다.
+/// 추론(inference) 스코프가 있는 토큰이 사용량 엔드포인트에서 허용되는 토큰입니다.
 const INFERENCE_SCOPE: &str = "user:inference";
 const BCRYPT_INIT_AUTH_MODE_INFO_VERSION: u32 = 1;
 
@@ -67,9 +64,9 @@ pub(super) fn read_token(config_path: &Path) -> Option<DesktopToken> {
     None
 }
 
-/// Signature over the encrypted cache rather than the file's mtime: the
-/// desktop app rewrites `config.json` for unrelated state such as window
-/// placement, and that must not read as a credential change.
+/// 파일 수정 시간(mtime) 대신 암호화된 캐시 내용 자체의 시그니처입니다.
+/// 데스크톱 앱은 창 위치 등 자격 증명과 무관한 상태 변경 시에도 `config.json`을 다시 쓰므로,
+/// 이를 자격 증명 변경으로 오인하지 않도록 합니다.
 pub(super) fn watch_signature(config_path: &Path) -> String {
     let key = format!("desktop:{}", config_path.display());
     let caches = std::fs::read_to_string(config_path)
@@ -87,7 +84,7 @@ pub(super) fn watch_signature(config_path: &Path) -> String {
     signature
 }
 
-/// Every token cache the config carries, newest layout first.
+/// 설정 파일에 포함된 모든 토큰 캐시 (최신 레이아웃 순).
 fn token_cache_values(config: &str) -> Vec<(&'static str, String)> {
     let Ok(json) = serde_json::from_str::<serde_json::Value>(config) else {
         return Vec::new();
@@ -101,8 +98,8 @@ fn token_cache_values(config: &str) -> Vec<(&'static str, String)> {
         .collect()
 }
 
-/// Picks the freshest entry that carries the inference scope, falling back to
-/// the freshest entry of any scope so a future key layout still resolves.
+/// 추론 스코프를 포함하는 가장 최신 항목을 선택하며, 향후 키 레이아웃 변경 시에도 동작할 수 있도록
+/// 스코프와 무관하게 가장 최신 항목으로 폴백합니다.
 fn select_token(plaintext: &str) -> Option<DesktopToken> {
     let json: serde_json::Value = serde_json::from_str(plaintext).ok()?;
     let entries = json.as_object()?;
@@ -397,7 +394,7 @@ fn with_gcm_key(
         return None;
     }
 
-    // The key object buffer must outlive the key handle it backs.
+    // 키 객체 버퍼는 해당 버퍼를 사용하는 키 핸들보다 오래 유지되어야 합니다.
     let mut key_object = vec![0u8; object_length as usize];
     let mut key_handle: *mut c_void = std::ptr::null_mut();
     if unsafe {
@@ -529,8 +526,8 @@ mod tests {
 
     #[test]
     fn ignores_emptied_token_caches() {
-        // The desktop app leaves the key in place with an empty value after a
-        // migration; that must not mask a populated cache under the other key.
+        // 데스크톱 앱은 마이그레이션 후 기존 키를 빈 값으로 남겨두기도 합니다.
+        // 이것이 다른 키에 저장된 유효한 캐시를 가려서는 안 됩니다.
         let config = r#"{"oauth:tokenCacheV2": "", "oauth:tokenCache": "djEwb2xk"}"#;
         assert_eq!(
             token_cache_values(config),
@@ -540,9 +537,9 @@ mod tests {
 
     #[test]
     fn rejects_blobs_that_are_not_os_crypt_v10() {
-        // Valid base64, but the version prefix is not "v10".
+        // 유효한 base64이지만 버전 접두사가 "v10"이 아닙니다.
         assert!(decrypt_os_crypt_value("bm90LXYxMC1kYXRh", &[0u8; 32]).is_none());
-        // Right prefix, too short to hold a nonce and a tag.
+        // 올바른 접두사이나 nonce와 tag를 담기에는 길이가 너무 짧습니다.
         assert!(decrypt_os_crypt_value("djEwc2hvcnQ", &[0u8; 32]).is_none());
         assert!(decrypt_os_crypt_value("!!!", &[0u8; 32]).is_none());
     }
@@ -555,9 +552,8 @@ mod tests {
         assert!(base64_decode("a-b_").is_none());
     }
 
-    /// Ignored by default: this one proves the real DPAPI + AES-GCM path
-    /// against whatever the Claude desktop app has on the current machine.
-    /// Run it with `cargo test -- --ignored` while signed in to the app.
+    /// 기본적으로 무시됨(ignored): 현재 기기의 Claude 데스크톱 앱 데이터를 대상으로
+    /// 실제 DPAPI + AES-GCM 복호화 경로를 검증합니다. 앱에 로그인된 상태에서 `cargo test -- --ignored`로 실행하세요.
     #[test]
     #[ignore = "requires a signed-in Claude desktop app on this machine"]
     fn reads_a_token_from_the_installed_desktop_app() {

@@ -1,3 +1,8 @@
+//! 여러 계정을 쓰는 공급자의 폴러 — 처음 보시는 분을 위한 안내.
+//!
+//! - 켜진 명함(프로필)마다 토큰 파일 자리를 계산해 각 공급자 폴러에 넘깁니다.
+//! - 하나가 실패해도 나머지는 계속 묻고, 직전 값은 "오래된 값"으로 살려 둡니다.
+
 use super::*;
 use crate::accounts::{fingerprint, AccountProfile, AccountSettings};
 use crate::models::AccountUsage;
@@ -97,8 +102,8 @@ where
             });
         }
     }
-    // Profiles sharing a source must not race token refresh or credit writes.
-    // Each distinct source has one job, while unrelated accounts run concurrently.
+    // 동일한 소스를 공유하는 프로필끼리는 토큰 갱신이나 크레딧 쓰기에서 경쟁(race)이 발생하지 않아야 합니다.
+    // 서로 다른 소스는 각각 하나의 작업으로 묶이고, 무관한 계정들은 동시에 병렬 실행됩니다.
     let mut groups: Vec<Vec<Target>> = Vec::new();
     for target in targets {
         if let Some(group) = groups.iter_mut().find(|group| {
@@ -146,8 +151,8 @@ where
                     if signature == current_signature {
                         break;
                     }
-                    // Re-read once after login/token rotation; never associate
-                    // a response (or a stale reading) with replaced credentials.
+                    // 로그인 또는 토큰 교체 후 1회 다시 읽습니다.
+                    // 교체된 자격 증명에 이전 응답(또는 오래된 측정치)을 연결하지 않습니다.
                     signature = current_signature;
                     result = Err(PollError::RequestFailed);
                 }
@@ -185,8 +190,8 @@ where
         }
     }
     data.select_accounts(settings);
-    // Account failures are data too: publish their status to the UI,
-    // and keep polling other accounts instead of pausing the whole provider.
+    // 계정 오류도 데이터의 일부입니다: UI에 오류 상태를 게시하고,
+    // 공급자 전체를 중단하는 대신 다른 계정들의 폴링을 계속 진행합니다.
     match first_error {
         Some(error) if data.accounts.is_empty() && data.is_empty() => Err(error),
         _ => Ok(data),
@@ -206,8 +211,8 @@ pub(super) fn carry_accounts(fresh: &mut AppUsageData, previous: &AppUsageData) 
         if account.usage.is_some() {
             continue;
         }
-        // Only transient failures may keep a reading, and only for the same
-        // configured source and unchanged credentials file.
+        // 일시적인 오류(transient failure)일 때만 직전 측정치를 유지하며,
+        // 이 역시 동일하게 설정된 소스이자 변경되지 않은 자격 증명 파일에 한합니다.
         if !account.error.is_some_and(PollError::is_transient) {
             continue;
         }
@@ -230,10 +235,6 @@ pub(super) fn carry_accounts(fresh: &mut AppUsageData, previous: &AppUsageData) 
 
 #[cfg(test)]
 mod tests {
-//! 여러 계정을 쓰는 공급자의 폴러 — 처음 보시는 분을 위한 안내.
-//!
-//! - 켜진 명함(프로필)마다 토큰 파일 자리를 계산해 각 공급자 폴러에 넘깁니다.
-//! - 하나가 실패해도 나머지는 계속 묻고, 직전 값은 "오래된 값"으로 살려 둡니다.
 
 use super::*;
     use crate::accounts::file_signature;

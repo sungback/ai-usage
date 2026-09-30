@@ -56,8 +56,8 @@ pub(super) fn credential_watch_snapshot(_all_sources: bool) -> Vec<String> {
     vec![environment, database]
 }
 
-/// Resolve a Cursor dashboard session cookie. An explicit environment value
-/// takes priority over the access token persisted by Cursor itself.
+/// Cursor 대시보드 세션 쿠키를 확인합니다. 명시적인 환경 변수 값이
+/// Cursor 자체에 영속화된 액세스 토큰보다 우선순위를 갖습니다.
 fn read_cursor_session_cookie() -> Option<String> {
     if let Some(token) = non_empty_environment(CURSOR_SESSION_TOKEN_ENV) {
         return normalize_cursor_session_cookie(&token);

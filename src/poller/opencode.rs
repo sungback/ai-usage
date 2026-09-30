@@ -47,7 +47,7 @@ struct DashboardUsage {
     monthly: Option<UsageWindow>,
 }
 
-// The console JSON API serializes microcent amounts as strings (JavaScript BigInts).
+// 콘솔 JSON API는 마이크로센트 금액을 문자열(JavaScript BigInt)로 직렬화합니다.
 #[derive(Deserialize)]
 struct GoStatus {
     access: Option<GoAccess>,
@@ -73,7 +73,7 @@ struct GoMeters {
 struct GoTimedMeter {
     #[serde(flatten)]
     meter: GoMeter,
-    // An unused rolling window has no reset time until the first request.
+    // 사용되지 않은 롤링 윈도우는 첫 번째 요청이 발생하기 전까지 리셋 시각이 없습니다.
     resets_at: Option<String>,
 }
 
@@ -111,9 +111,8 @@ fn poll_dashboard(credentials: &DashboardCredentials) -> Result<UsageData, PollE
         session,
         weekly,
         weekly_label,
-        // The monthly window is kept available to themes alongside the
-        // auto-selected `weekly` slot (which prefers the more constrained
-        // of the two windows, as before).
+        // 월간 윈도우는 기존처럼 두 윈도우 중 더 제한적인 쪽을 우선 선택하는
+        // 자동 선택된 `weekly` 슬롯과 함께 테마에서 사용할 수 있도록 유지됩니다.
         monthly: usage.monthly.as_ref().map(section_from_window),
         credits: None,
         stale: false,
@@ -187,8 +186,8 @@ fn fetch_go_status(
     }) {
         credentials.auth_cookie.clone()
     } else {
-        // Bare legacy auth values may contain '=' padding; that alone does
-        // not identify a complete Cookie header.
+        // 기존의 단순 인증 값에는 '=' 패딩이 포함될 수 있으므로,
+        // 그것만으로는 완전한 Cookie 헤더인지 식별할 수 없습니다.
         format!("auth={}", credentials.auth_cookie)
     };
 
@@ -339,7 +338,7 @@ fn path_signature(kind: &str, path: &Path) -> String {
 mod tests {
     use super::*;
 
-    // Wire shape verified against the console's Go status schema and usage UI.
+    // 콘솔의 Go 상태 스키마 및 사용량 UI를 기준으로 검증된 와이어 포맷 형태입니다.
     const GO_STATUS_JSON: &str = r#"{
         "subscriberUserID": "usr_example",
         "useBalance": false,

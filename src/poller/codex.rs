@@ -35,22 +35,21 @@ struct CodexCredits {
     unlimited: bool,
     #[serde(default)]
     overage_limit_reached: bool,
-    /// Sent as a decimal string, in credits rather than currency.
+    /// 통화 단위가 아닌 크레딧 단위의 10진수 문자열로 전달됩니다.
     balance: Option<String>,
 }
 
-/// Codex bills credits at 25 to the dollar. Only the displayed amount depends
-/// on this, never the gauge: a ratio of two credit figures is unit-free, so a
-/// change to this rate cannot make the bar wrong.
+/// Codex는 1달러당 25크레딧으로 청구합니다. 표시되는 금액만 이 비율에 의존하며,
+/// 게이지 바는 의존하지 않습니다. 두 크레딧 수치의 비율은 단위가 없으므로
+/// 이 환율이 변경되어도 바가 잘못 표시되지 않습니다.
 const CODEX_CREDITS_PER_DOLLAR: f64 = 25.0;
 
 #[derive(Deserialize)]
 struct CodexRateLimitDetails {
     primary_window: Option<Option<Box<CodexRateLimitWindow>>>,
     secondary_window: Option<Option<Box<CodexRateLimitWindow>>>,
-    /// True once any window is spent, whichever one it was. Better than
-    /// reading a percentage back out of a window we mapped ourselves, and it
-    /// keeps working if the five-hour window is switched on again.
+    /// 어느 윈도우든 하나라도 소진되면 true가 됩니다. 직접 매핑한 윈도우에서
+    /// 퍼센티지를 다시 읽는 것보다 낫고, 5시간 윈도우가 다시 활성화되어도 계속 잘 동작합니다.
     #[serde(default)]
     limit_reached: bool,
 }
@@ -62,9 +61,8 @@ pub(super) struct CodexRateLimitWindow {
     limit_window_seconds: Option<i64>,
 }
 
-/// A window at or above this length is a weekly allowance rather than a
-/// session one. Codex currently sends 604800 for weekly and 18000 for the
-/// five-hour window, so anything from a day up is unambiguously weekly.
+/// 이 길이 이상의 윈도우는 세션 한도가 아닌 주간 한도로 취급합니다.
+/// Codex는 현재 주간에 604800초, 5시간 윈도우에 18000초를 보내므로 1일 이상이면 명확하게 주간입니다.
 const WEEKLY_WINDOW_THRESHOLD_SECONDS: i64 = 86_400;
 
 pub(super) fn poll_codex() -> Result<UsageData, PollError> {
@@ -152,10 +150,9 @@ fn codex_usage_from_response_at(
     let details = *response.rate_limit.flatten()?;
     let mut data = UsageData::default();
 
-    // Assign by window length, not by slot. Codex has shipped the weekly
-    // allowance in `primary_window` with `secondary_window` empty while the
-    // five-hour window is switched off, so trusting the slot order puts a
-    // weekly figure in the session bar.
+    // 슬롯 순서가 아니라 윈도우 길이에 따라 할당합니다. Codex는 5시간 윈도우가 꺼져 있을 때
+    // `secondary_window`를 비우고 `primary_window`에 주간 한도를 보내기도 하므로,
+    // 슬롯 순서만 믿으면 세션 바에 주간 수치가 들어가게 됩니다.
     for (window, default_is_weekly) in [
         (details.primary_window.flatten(), false),
         (details.secondary_window.flatten(), true),
@@ -208,12 +205,11 @@ fn credit_state_file_name(path: &Path, account_id: Option<&str>) -> String {
     )
 }
 
-/// Tracks the balance across polls and turns it into a gauge.
+/// 폴링 간 잔액을 추적하여 게이지로 변환합니다.
 ///
-/// The balance only ever falls as credits are spent, so any rise is a top-up
-/// and re-baselines the gauge. Tracking continues whether or not the gauge is
-/// shown, because a top-up that happens while the bar is hidden still has to
-/// move the baseline.
+/// 잔액은 크레딧이 소비될 때만 감소하므로, 잔액이 증가하는 것은 충전(top-up)을 의미하며
+/// 게이지의 기준점(baseline)을 재설정합니다. 바가 숨겨져 있을 때 발생한 충전도
+/// 기준점을 이동시켜야 하므로, 게이지 표시 여부와 무관하게 추적은 계속됩니다.
 fn codex_credits(
     previous: Option<CodexCreditsState>,
     credits: &CodexCredits,
@@ -229,8 +225,8 @@ fn codex_credits(
 
     let previous = previous.filter(|state| state.account_id.as_deref() == account_id);
     let baseline = match previous {
-        // A rise can only come from a top-up. Seed from the first balance we
-        // see, which reads as untouched until the next top-up corrects it.
+        // 잔액 증가는 충전으로만 발생합니다. 처음 확인한 잔액을 기준점으로 삼으며,
+        // 다음 충전으로 바로잡히기 전까지는 손대지 않은 상태로 읽힙니다.
         Some(previous) if balance <= previous.balance => previous.baseline.max(balance),
         _ => balance,
     };
@@ -240,12 +236,10 @@ fn codex_credits(
         baseline,
     };
 
-    // The bars stay on the ordinary windows until two things are true at once:
-    // an allowance is spent, and credits have actually started going down
-    // against the current top-up. The second half is an observation rather
-    // than an assumption about when a provider decides to bill credits, and it
-    // holds steady while idle, so the gauge does not flicker away on a poll
-    // that happens to see no change.
+    // 두 가지 조건이 동시에 만족될 때까지 바는 일반 윈도우 상태를 유지합니다:
+    // 한도가 소진되었고, 현재 충전액에서 실제로 크레딧이 차감되기 시작했을 때입니다.
+    // 후자는 공급자가 크레딧을 청구하는 시점에 대한 가정이 아니라 관측된 사실에 기반하며,
+    // 유휴 상태에서도 안정적으로 유지되어 변화가 없는 폴링에서 게이지가 깜빡이며 사라지지 않습니다.
     let in_use = balance < baseline;
     let applicable =
         credits.has_credits && !credits.unlimited && limit_reached && in_use && baseline > 0.0;
@@ -269,8 +263,8 @@ fn codex_credits(
     )
 }
 
-/// Returns no classification when the API omits the duration. The caller then
-/// preserves the legacy slot mapping: primary is session, secondary is weekly.
+/// API에서 기간(duration)을 생략한 경우 분류를 반환하지 않습니다. 호출자는
+/// 기본 슬롯 매핑(primary는 세션, secondary는 주간)을 유지합니다.
 fn window_is_weekly(window: &CodexRateLimitWindow) -> Option<bool> {
     window
         .limit_window_seconds
@@ -463,11 +457,11 @@ mod tests {
         let (state, section) = codex_credits(None, &credits("1026.112935", true), true, None);
 
         assert_eq!(state.baseline, 1026.112935);
-        // Nothing has been drawn against the seeded baseline yet, so the bars
-        // stay on the ordinary windows until a later poll sees it fall.
+        // 기준점이 설정된 이후 아직 사용된 내역이 없으므로,
+        // 이후 폴링에서 잔액 감소를 감지할 때까지 바는 일반 윈도우 상태를 유지합니다.
         assert!(section.is_none());
 
-        // That later poll, with 25 credits to the dollar.
+        // 이후 폴링(1달러당 25크레딧 환율 적용).
         let previous = state;
         let (_, section) = codex_credits(Some(previous), &credits("1016.190898", true), true, None);
         let section = section.expect("a falling balance should expose the gauge");
@@ -503,8 +497,8 @@ mod tests {
         let (state, section) = codex_credits(Some(previous), &credits("2600.0", true), true, None);
 
         assert_eq!(state.baseline, 2600.0);
-        // A fresh top-up has nothing spent against it, so the gauge stands
-        // down until credits start being drawn on again.
+        // 새로 충전된 직후에는 사용액이 0이므로,
+        // 다시 크레딧 차감이 시작될 때까지 게이지는 대기 상태를 유지합니다.
         assert!(section.is_none());
     }
 
@@ -539,7 +533,7 @@ mod tests {
         };
         let (state, section) = codex_credits(Some(previous), &credits("1000.0", true), false, None);
 
-        // Tracking continues while hidden so a reload still moves the baseline.
+        // 바가 숨겨져 있어도 추적은 계속되어 충전 시 기준점이 올바르게 이동합니다.
         assert_eq!(state.balance, 1000.0);
         assert_eq!(state.baseline, 2500.0);
         assert!(section.is_none());
@@ -576,8 +570,8 @@ mod tests {
 
     #[test]
     fn a_lone_weekly_window_lands_in_the_weekly_bar() {
-        // Codex ships this shape while the five-hour window is switched off:
-        // the weekly allowance arrives in `primary_window`.
+        // Codex는 5시간 윈도우가 꺼져 있을 때 이 형태로 전달합니다:
+        // `primary_window`에 주간 한도가 들어옵니다.
         let data = usage_from_json(
             r#"{
                 "rate_limit": {

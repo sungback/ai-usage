@@ -116,7 +116,7 @@ impl Default for AccountProfile {
 pub struct ProviderAccounts {
     pub profiles: Vec<AccountProfile>,
     pub selected: String,
-    /// Retain retired IDs so existing theme bindings never target a new account.
+    /// 기존 테마 바인딩이 새로운 계정을 가리키지 않도록 은퇴한 ID를 보존합니다.
     pub used_ids: std::collections::BTreeSet<String>,
 }
 
@@ -175,8 +175,8 @@ impl ProviderAccounts {
             .into_iter()
             .map(|id| id.to_ascii_lowercase())
             .collect();
-        // Reserve every existing ID before allocating replacements. An earlier
-        // invalid profile must not steal a later valid profile's binding.
+        // 대체 ID를 할당하기 전에 기존의 모든 ID를 먼저 예약합니다.
+        // 앞선 유효하지 않은 프로필이 뒤에 오는 유효한 프로필의 바인딩을 가로채서는 안 됩니다.
         self.used_ids.extend(
             self.profiles
                 .iter()
@@ -254,7 +254,7 @@ pub fn expand_path(path: &Path) -> Option<PathBuf> {
     if path.is_absolute() || is_windows_drive_absolute(&text) {
         Some(path.to_path_buf())
     } else {
-        // Settings must behave the same when launched from a terminal or at login.
+        // 터미널에서 실행하든 로그인 시 자동 실행하든 설정이 동일하게 동작해야 합니다.
         None
     }
 }
