@@ -88,7 +88,7 @@ fn normalized_account_ids_keep_theme_values_independent() {
             Some(expected)
         );
     }
-    // Removal and startup use the same typed defaults, including countdown.
+    // 삭제 및 시작 시 카운트다운을 포함하여 동일한 타입의 기본값을 사용합니다.
     let empty = DataContext::from_usage_with_runtime(
         None,
         &Canvas::default(),
@@ -517,7 +517,7 @@ fn text_templates_allow_if_to_return_quoted_strings() {
 #[test]
 fn text_templates_can_select_weekdays_from_a_reset_epoch() {
     let mut context = DataContext::default();
-    // Seven days before this reset is Monday, 5 January 1970 in UTC+10.
+    // 이 리셋 7일 전은 UTC+10 기준 1970년 1월 5일 월요일입니다.
     context.insert("codex.weekly.reset.unix", 950_400.0);
     let day = "(floor((codex.weekly.reset.unix - 604800 + 36000) / 86400) + 3) % 7";
     let template = format!(
@@ -530,7 +530,7 @@ fn text_templates_can_select_weekdays_from_a_reset_epoch() {
 fn timestamps_support_localized_and_iso_date_time_formats() {
     let mut context = DataContext::default();
     context.insert_string("i18n.locale", "en-US");
-    // Monday, 5 January 1970 at 13:04:09 UTC.
+    // UTC 기준 1970년 1월 5일 월요일 13:04:09.
     context.insert("timestamp", 392_649.0);
     assert_eq!(format_template("{timestamp:utc_weekday_2}", &context), "Mo");
     assert_eq!(
@@ -759,10 +759,10 @@ fn starter_theme_round_trips_and_validates() {
             _ => None,
         })
         .collect::<Vec<_>>();
-    // Classic contains separate light and dark progress layers so the
-    // 1.4.9 palette follows the taskbar mode without runtime recolouring:
-    // five providers over two windows in two modes, plus a credit overlay on
-    // the weekly row of the two providers that report credits.
+    // Classic은 런타임 재색상화 없이 1.4.9 팔레트가 작업 표시줄 모드를 따를 수 있도록
+    // 밝은/어두운 진행률 레이어를 별도로 포함합니다:
+    // 2개 모드 x 2개 윈도우 x 5개 공급자, 여기에 크레딧을 보고하는 2개 공급자의
+    // 주간 행에 크레딧 오버레이가 추가됩니다.
     assert_eq!(segments, vec![10; 5 * 2 * 2 + 2 * 2]);
     assert!(theme.surfaces[0]
         .children
@@ -838,9 +838,8 @@ fn schema_only_serializes_placement_fields_for_the_relevant_level() {
 
 #[test]
 fn invalid_colors_return_none_instead_of_panicking() {
-    // A multi-byte character can make the byte length match a valid hex
-    // length (6 or 8) while the string is not actually ASCII hex; this must
-    // not panic on a byte-boundary slice.
+    // 다중 바이트 문자로 인해 실제로는 ASCII 16진수가 아닌데도 바이트 길이가
+    // 유효한 16진수 길이(6 또는 8)와 일치할 수 있습니다. 바이트 경계 슬라이싱으로 패닉이 발생해서는 안 됩니다.
     assert_eq!(parse_color("#123€"), None);
     assert_eq!(parse_color("#1234567€"), None);
     assert_eq!(parse_color("#gggggg"), None);
@@ -939,7 +938,7 @@ fn opencode_monthly_window_is_available_to_templates_when_present() {
         "43.0%"
     );
     assert!(evaluate("opencode.monthly.reset.seconds", &context).unwrap() > 1_713_600.0);
-    // Providers without a monthly window expose safe zeros and an availability flag.
+    // 월간 윈도우가 없는 공급자는 안전한 0 값과 가용성 플래그를 노출합니다.
     assert_eq!(evaluate("claude.monthly.available", &context).unwrap(), 0.0);
     assert_eq!(
         evaluate("claude.monthly.percentage", &context).unwrap(),
@@ -1030,7 +1029,7 @@ fn floating_card_inset_preserves_content_layout_clipping_and_mouse_targets() {
     child.background = LayerBackground::Colour {
         colour: Paint::new("#FF0000FF"),
     };
-    // Moving the frame must not change authored expressions such as this.x.
+    // 프레임을 이동해도 this.x와 같이 작성된 수식이 변경되어서는 안 됩니다.
     if let LayerBackground::Colour { colour } = &mut child.background {
         colour.opacity = Expression("this.x == 0".into());
     }
@@ -1086,7 +1085,7 @@ fn floating_card_inset_preserves_content_layout_clipping_and_mouse_targets() {
             );
         }
     }
-    // Authored backgrounds do not receive the automatic card or its padding.
+    // 사용자가 직접 작성한 배경은 자동 카드나 그 패딩을 적용받지 않습니다.
     theme.surfaces[0].background = LayerBackground::Colour {
         colour: Paint::new("#123456FF"),
     };
@@ -1965,8 +1964,7 @@ fn headline_follows_the_window_closest_to_its_limit() {
         )
     };
 
-    // A disabled session window must not hold the badge at zero while the
-    // weekly allowance is spent.
+    // 주간 한도가 소진된 상태에서 비활성화된 세션 윈도우로 인해 배지가 0으로 묶여 있어서는 안 됩니다.
     let spent_weekly = context(UsageData {
         session: percent(0.0),
         weekly: percent(100.0),
@@ -1981,7 +1979,7 @@ fn headline_follows_the_window_closest_to_its_limit() {
     });
     assert_eq!(busy_session.get("codex.headline.percentage"), Some(72.0));
 
-    // Once credits are covering the overflow they are the live figure.
+    // 크레딧이 초과분을 감당하기 시작하면 크레딧이 실시간 수치가 됩니다.
     let on_credits = context(UsageData {
         session: percent(0.0),
         weekly: percent(100.0),
@@ -2015,8 +2013,8 @@ fn codex_session_bindings_fall_back_without_hiding_the_exact_five_hour_window() 
         &Canvas::default(),
     );
 
-    // Existing custom themes keep the primary-window behavior they saw
-    // before Codex windows were classified by duration.
+    // 기존 커스텀 테마는 Codex 윈도우가 기간별로 분류되기 전에 보았던
+    // 기본 윈도우(primary-window) 동작을 유지합니다.
     assert_eq!(context.get("codex.session.percentage"), Some(83.0));
     assert_eq!(context.get("codex.session.remaining"), Some(17.0));
     assert_eq!(
@@ -2030,7 +2028,7 @@ fn codex_session_bindings_fall_back_without_hiding_the_exact_five_hour_window() 
     assert_eq!(context.get("active.five_hour.available"), Some(0.0));
     assert_eq!(context.get("codex.weekly.available"), Some(1.0));
 
-    // New and bundled themes can still address the actual five-hour window.
+    // 신규 및 번들 테마는 실제 5시간 윈도우를 계속 직접 참조할 수 있습니다.
     assert_eq!(context.get("codex.five_hour.percentage"), Some(0.0));
     assert_eq!(context.get("codex.five_hour.remaining"), Some(100.0));
     assert_eq!(context.get("codex.five_hour.reset.unix"), Some(0.0));
@@ -2121,7 +2119,7 @@ fn reported_windows_are_available_even_when_idle_without_reset_times() {
                     Some(1.0)
                 );
             }
-            // Monthly is explicitly optional, so no reset timestamp is needed.
+            // 월간은 명시적으로 선택 사항이므로 리셋 타임스탬프가 필요하지 않습니다.
             assert_eq!(context.get(&format!("{name}.monthly.available")), Some(1.0));
         }
     }
@@ -2220,7 +2218,7 @@ fn credit_badges_abbreviate_a_balance_too_wide_for_the_tray() {
         )
     };
 
-    // Up to three figures the badge shows whole dollars.
+    // 3자리 이하까지는 배지에 달러 단위 정수를 표시합니다.
     assert_eq!(
         format_template("{codex.credits.balance:0}", &context(39.25)),
         "39"
@@ -2229,7 +2227,7 @@ fn credit_badges_abbreviate_a_balance_too_wide_for_the_tray() {
         format_template("{codex.credits.balance:0}", &context(450.0)),
         "450"
     );
-    // Four will not fit, so the tray falls back to thousands.
+    // 4자리는 들어가지 않으므로 트레이는 천(k) 단위로 폴백합니다.
     assert_eq!(
         format_template("{codex.credits.balance / 1000:0.0}k", &context(1234.0)),
         "1.2k"
@@ -2292,7 +2290,7 @@ fn countdown_display_values_invert_usage_without_moving_the_thresholds() {
         "75%"
     );
 
-    // Severity is what a theme colours by, so the spent share never flips.
+    // 테마 색상 지정의 기준이 되는 심각도(severity)이므로 소비된 비율은 반전되지 않습니다.
     for context in [counting_up, counting_down] {
         assert_eq!(
             format_template("{claude.session:usage_line}", &context),
@@ -2369,7 +2367,7 @@ fn display_summaries_preserve_status_reset_formatting_and_legacy_tokens() {
     context.insert("claude.session.reset.unix", 1.0);
     context.insert("claude.session.reset.seconds", 3_600.0);
 
-    // Explicit and legacy summaries can coexist in the same theme.
+    // 명시적 요약과 레거시 요약은 동일한 테마 내에서 공존할 수 있습니다.
     let template = "{claude.session:usage_line} / {claude.session.display:usage_line}";
     assert!(validate_template(template, &context).is_empty());
     assert_eq!(format_template(template, &context), "25% · 1시간 / 75% · 1시간");
@@ -2474,15 +2472,14 @@ fn urls_are_limited_to_user_facing_protocols() {
     assert!(!supported_url("javascript:alert(1)"));
 }
 
-/// Measures one full starter-surface render (the work a clock-theme repaint
-/// repeats every tick). Run explicitly with `-- --ignored`; the printed
-/// average decides whether repaint caching is worth the complexity.
+/// 스타터 서피스 전체 1회 렌더링 비용을 측정합니다 (시계 테마가 매 틱마다 반복하는 작업).
+/// `-- --ignored` 옵션으로 직접 실행하세요. 출력된 평균값으로 재페인팅 캐싱을 도입할 가치가 있는지 판단합니다.
 #[test]
 #[ignore]
 fn starter_surface_render_cost_per_repaint() {
     let theme = ThemeDocument::starter();
     let runtime = ThemeRuntime::default();
-    // Warm up once so font loading and lazy statics don't skew the average.
+    // 폰트 로딩과 지연 초기화 정적 변수로 인해 평균이 왜곡되지 않도록 1회 웜업합니다.
     let first = render_theme_surface_with_runtime_at_scale(&theme, 0, None, runtime, 2.0);
     assert!(first.pixels.iter().any(|pixel| *pixel != 0));
     let iterations = 20;

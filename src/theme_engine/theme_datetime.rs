@@ -27,7 +27,7 @@ pub(super) struct DateTimeParts {
     pub(super) year: u16,
     pub(super) month: u16,
     pub(super) day: u16,
-    /// Monday is 0 and Sunday is 6, matching the bundled theme examples.
+    /// 번들된 테마 예제와 일치하도록 월요일은 0, 일요일은 6으로 표현합니다.
     pub(super) weekday: u16,
     pub(super) hour: u16,
     pub(super) minute: u16,

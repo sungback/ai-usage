@@ -476,9 +476,9 @@ pub(super) fn call_function(
 
 pub fn parse_color(source: &str) -> Option<Rgba> {
     let hex = source.trim().strip_prefix('#')?;
-    // Parse the whole string as one hex number instead of byte-slicing it:
-    // slicing by byte offset panics on a "char boundary" if a stray
-    // multi-byte character happens to land inside a 6/8-byte-long string.
+    // 바이트 슬라이싱 대신 전체 문자열을 하나의 16진수로 파싱합니다:
+    // 바이트 오프셋으로 슬라이싱할 경우 6/8바이트 길이의 문자열 내에 우연히
+    // 다중 바이트 문자가 포함되어 있으면 "char boundary" 패닉이 발생할 수 있습니다.
     match hex.len() {
         6 => {
             let value = u32::from_str_radix(hex, 16).ok()?;
@@ -503,8 +503,8 @@ pub fn parse_color(source: &str) -> Option<Rgba> {
 }
 
 pub(super) fn format_usage_line(base: &str, context: &DataContext) -> Option<String> {
-    // Existing summaries always show consumption. A `.display` suffix opts
-    // this individual token into the user's usage direction preference.
+    // 기존 요약은 항상 소비량을 보여줍니다. `.display` 접미사를 붙이면
+    // 해당 개별 토큰이 사용자의 사용량 표시 방향(소비량 vs 잔여량) 설정을 따르게 됩니다.
     let (base, metric) = base
         .strip_suffix(".display")
         .map(|base| (base, "display"))

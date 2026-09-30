@@ -7,7 +7,7 @@
 
 use super::*;
 
-/// The automatic floating card owns its inset; it is not part of theme layout.
+/// 자동 플로팅 카드는 자체 인셋(안쪽 여백)을 소유하며, 테마 레이아웃의 일부가 아닙니다.
 pub fn surface_horizontal_padding(
     theme: &ThemeDocument,
     surface_index: usize,
@@ -67,8 +67,8 @@ pub fn format_template(template: &str, context: &DataContext) -> String {
     output
 }
 
-/// Resolve and rasterize a custom theme without mutating the live application.
-/// The same output is used by every surface that renders this theme.
+/// 실행 중인 애플리케이션의 상태를 변경하지 않고 커스텀 테마를 해석하고 래스터화합니다.
+/// 이 테마를 렌더링하는 모든 서피스에서 동일한 출력이 사용됩니다.
 #[cfg(test)]
 pub fn render_theme(theme: &ThemeDocument, data: Option<&AppUsageData>) -> RenderedTheme {
     render_theme_surface_with_runtime(theme, 0, data, ThemeRuntime::default())
@@ -84,8 +84,8 @@ pub fn render_theme_surface_with_runtime(
     render_theme_surface_with_runtime_at_scale(theme, surface_index, data, runtime, 1.0)
 }
 
-/// Rasterize a theme surface at a physical-pixel scale while keeping theme
-/// expressions and object geometry in their 96-DPI logical coordinate space.
+/// 테마 수식과 객체 지오메트리를 96-DPI 논리 좌표계에 유지하면서,
+/// 물리적 픽셀 배율에 맞춰 테마 서피스를 래스터화합니다.
 pub fn render_theme_surface_with_runtime_at_scale(
     theme: &ThemeDocument,
     surface_index: usize,
@@ -106,8 +106,8 @@ pub fn render_theme_surface_with_runtime_at_scale(
     let (logical_width, logical_height) =
         resolve_object_size(surface, data, runtime, &mut warnings);
     let padding = surface_horizontal_padding(theme, surface_index, runtime);
-    // Snap the translation once, including parent clips, so fractional DPI
-    // cannot trim a content pixel at the far edge of the inset.
+    // 소수점 DPI에서 인셋의 먼 쪽 가장자리에 있는 콘텐츠 픽셀이 잘리지 않도록,
+    // 부모 클립을 포함한 평행이동 값을 한 번 스냅(snap)합니다.
     let content_offset = (padding as f64 * scale).round() / scale;
     let width = scaled_render_dimension(logical_width + 2 * padding, scale);
     let height = scaled_render_dimension(logical_height, scale);
@@ -339,9 +339,9 @@ pub(super) fn resolve_objects_for<'a>(
     (resolved, warnings)
 }
 
-/// Return the topmost interactive layer at a logical canvas point. Non-
-/// interactive layers intentionally do not block layers beneath them, which
-/// lets visual decoration sit above a larger deliberate hit area.
+/// 논리 캔버스 좌표에서 상호작용 가능한 최상위 레이어를 반환합니다.
+/// 비상호작용 레이어는 의도적으로 아래 레이어를 가리지 않으므로,
+/// 시각적 장식이 더 넓게 설정된 히트 영역 위에 올라갈 수 있습니다.
 pub fn hit_test_mouse_event(
     theme: &ThemeDocument,
     surface_index: usize,
@@ -423,8 +423,8 @@ pub fn hit_test_mouse_event(
     }
 }
 
-/// Resolve one SceneObject into canvas coordinates, including every parent object's
-/// position and anchor. Callers use this for accurate selection handles.
+/// 모든 부모 객체의 위치와 앵커를 포함하여 하나의 SceneObject를 캔버스 좌표계로 계산합니다.
+/// 호출자는 이를 통해 정확한 선택 핸들을 표시할 수 있습니다.
 #[cfg(test)]
 pub fn resolve_object_bounds_with_runtime(
     theme: &ThemeDocument,
@@ -479,7 +479,7 @@ pub fn resolve_surface_size(
     )
 }
 
-/// Expression canvases always describe the authored content, without card chrome.
+/// 수식 캔버스는 카드 외곽(chrome)을 제외하고 항상 작성된 콘텐츠 자체만을 설명합니다.
 pub fn resolve_surface_content_size(
     theme: &ThemeDocument,
     surface_index: usize,
@@ -1076,9 +1076,9 @@ pub(super) fn load_image_cached(
     path: &Path,
 ) -> Result<Arc<image::DynamicImage>, image::ImageError> {
     type ImageCache = HashMap<PathBuf, (Option<std::time::SystemTime>, Arc<image::DynamicImage>)>;
-    // A widget references a handful of images; the cap only stops unbounded
-    // growth when themes are switched repeatedly. Overflow clears the cache
-    // and the entries still needed are re-decoded on demand.
+    // 위젯은 소수의 이미지만 참조하므로, 이 한도는 테마가 반복 전환될 때
+    // 메모리가 무한정 늘어나는 것만 방지합니다. 용량을 초과하면 캐시를 비우고
+    // 여전히 필요한 항목은 요청 시 다시 디코딩합니다.
     const MAX_CACHED_IMAGES: usize = 64;
     static CACHE: OnceLock<Mutex<ImageCache>> = OnceLock::new();
     let modified = std::fs::metadata(path)
@@ -1184,9 +1184,9 @@ pub(super) fn render_text_mask(
     use windows::Win32::Foundation::{COLORREF, RECT};
     use windows::Win32::Graphics::Gdi::*;
 
-    // windows-rs represents an empty UTF-16 Vec with a non-null dangling
-    // sentinel. DrawTextW still probes the pointer when cchText is zero, so
-    // calling it for empty output causes a native access violation.
+    // windows-rs는 비어 있는 UTF-16 Vec을 null이 아닌 매달린 센티널(sentinel) 포인터로 표현합니다.
+    // DrawTextW는 cchText가 0일 때도 포인터를 검사하므로, 빈 출력에 대해 호출하면
+    // 네이티브 액세스 위반(Access Violation)이 발생합니다.
     if text.is_empty() || width == 0 || height == 0 || target.is_empty() {
         return;
     }
@@ -1291,7 +1291,7 @@ pub(super) fn render_text_mask(
     _align: TextAlign,
     _color: Rgba,
 ) {
-    // Non-windows fallback stub.
+    // Windows 외 플랫폼용 폴백 스텁.
 }
 
 pub(super) fn text_mask_coverage(pixel: u32, rendering: FontRendering, contrast: f64) -> f64 {
@@ -1305,9 +1305,9 @@ pub(super) fn text_mask_coverage(pixel: u32, rendering: FontRendering, contrast:
     if rendering == FontRendering::Aliased {
         return (intensity > 0.0) as u8 as f64;
     }
-    // GDI tunes grayscale antialiasing for direct drawing onto an opaque
-    // surface. Reusing those gamma-adjusted values as linear per-pixel alpha
-    // makes the fringe too opaque and small text look artificially bold.
+    // GDI는 불투명한 서피스에 직접 그리는 용도로 그레이스케일 안티앨리어싱을 조절합니다.
+    // 이러한 감마 보정된 값을 선형 픽셀당 알파로 재사용하면 가장자리가 너무 불투명해져
+    // 작은 텍스트가 부자연스럽게 굵어 보입니다.
     intensity.clamp(0.0, 1.0).powf(contrast.clamp(0.25, 4.0))
 }
 
@@ -1606,11 +1606,11 @@ pub(super) fn segmented_position_visible(position: u32, extent: u32, count: u32,
         return true;
     }
 
-    // Gaps exist only between segments. Clamp pathological inputs so every
-    // segment can retain at least one physical pixel when the bar is wide
-    // enough, then sample each pixel at its centre against cumulative bounds.
-    // This keeps both outer edges intact and distributes DPI rounding across
-    // the internal segments and gaps instead of dropping the final pixel.
+    // 간격(gap)은 세그먼트 사이에만 존재합니다. 바가 충분히 넓을 때 모든 세그먼트가
+    // 최소 1개의 물리적 픽셀을 가질 수 있도록 비정상 입력을 제한한 후,
+    // 각 픽셀의 중심점을 누적 경계와 비교하여 샘플링합니다.
+    // 이를 통해 양쪽 바깥 테두리를 온전히 유지하고, 마지막 픽셀이 누락되는 대신
+    // DPI 반올림 오차가 내부 세그먼트와 간격 전체에 고르게 분산됩니다.
     let count = count.min(extent);
     let gap = if gap.is_finite() { gap.max(0.0) } else { 0.0 };
     let max_gap = (extent - count) as f64 / (count - 1) as f64;
