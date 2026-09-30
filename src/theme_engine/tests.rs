@@ -2473,3 +2473,25 @@ fn urls_are_limited_to_user_facing_protocols() {
     assert!(!supported_url("powershell:whoami"));
     assert!(!supported_url("javascript:alert(1)"));
 }
+
+/// Measures one full starter-surface render (the work a clock-theme repaint
+/// repeats every tick). Run explicitly with `-- --ignored`; the printed
+/// average decides whether repaint caching is worth the complexity.
+#[test]
+#[ignore]
+fn starter_surface_render_cost_per_repaint() {
+    let theme = ThemeDocument::starter();
+    let runtime = ThemeRuntime::default();
+    // Warm up once so font loading and lazy statics don't skew the average.
+    let first = render_theme_surface_with_runtime_at_scale(&theme, 0, None, runtime, 2.0);
+    assert!(first.pixels.iter().any(|pixel| *pixel != 0));
+    let iterations = 20;
+    let start = std::time::Instant::now();
+    for _ in 0..iterations {
+        let rendered =
+            render_theme_surface_with_runtime_at_scale(&theme, 0, None, runtime, 2.0);
+        std::hint::black_box(rendered.pixels.len());
+    }
+    let average_ms = start.elapsed().as_secs_f64() * 1000.0 / iterations as f64;
+    println!("starter surface render: {average_ms:.2} ms avg over {iterations} runs");
+}
