@@ -224,6 +224,19 @@ impl ApplicationHandler<UserEvent> for MacOsMonitorApp {
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
             UserEvent::UsageUpdated(data) => {
+                let alerts = data.threshold_crossings(self.current_usage.as_ref());
+                if !alerts.is_empty() {
+                    let settings = crate::app_settings::load_settings();
+                    let lang = crate::localization::resolve_language(
+                        settings
+                            .language
+                            .as_deref()
+                            .and_then(crate::localization::LanguageId::from_code),
+                    );
+                    for alert in &alerts {
+                        tray::notify_threshold(alert, lang);
+                    }
+                }
                 self.current_usage = Some(*data);
                 self.update_tray();
             }

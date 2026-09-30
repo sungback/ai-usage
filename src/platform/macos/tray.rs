@@ -65,6 +65,77 @@ fn reset_countdown_header(
     }
 }
 
+// ── 임계치 경고 OS 알림 ───────────────────────────────────────────────────
+
+fn apple_script_string(value: &str) -> String {
+    format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
+}
+
+fn alert_remaining(resets_at: Option<std::time::SystemTime>, lang: crate::localization::LanguageId) -> Option<String> {
+    let remaining = resets_at?.duration_since(std::time::SystemTime::now()).ok()?;
+    let total_mins = remaining.as_secs() / 60;
+    if total_mins == 0 {
+        return None;
+    }
+    let strings = lang.strings();
+    let days = total_mins / (24 * 60);
+    let hours = (total_mins % (24 * 60)) / 60;
+    let mins = total_mins % 60;
+    if lang.code() == "ko" {
+        if days > 0 {
+            Some(format!("{days}{} {hours}{} {mins}{}", strings.day_suffix, strings.hour_suffix, strings.minute_suffix))
+        } else if hours > 0 {
+            Some(format!("{hours}{} {mins}{}", strings.hour_suffix, strings.minute_suffix))
+        } else {
+            Some(format!("{mins}{}", strings.minute_suffix))
+        }
+    } else if hours > 0 || days > 0 {
+        Some(format!("{}h {}m", days * 24 + hours, mins))
+    } else {
+        Some(format!("{mins}m"))
+    }
+}
+
+pub fn notify_threshold(
+    alert: &crate::models::ThresholdAlert,
+    lang: crate::localization::LanguageId,
+) {
+    use crate::models::ThresholdLevel::{Critical, Warn};
+    let provider_name = lang.text(alert.provider.descriptor().display_name);
+    let pct = alert.percentage;
+    let (title, body) = if lang.code() == "ko" {
+        let title = match alert.level {
+            Warn => format!("🔔 {provider_name} 사용량 70% 초과"),
+            Critical => format!("🔔 {provider_name} 한도 임박!"),
+        };
+        let mut body = format!("현재 {pct:.0}% 사용 중");
+        if let Some(left) = alert_remaining(alert.resets_at, lang) {
+            body.push_str(&format!(" · 세션 리셋까지 {left}"));
+        }
+        (title, body)
+    } else {
+        let title = match alert.level {
+            Warn => format!("🔔 {provider_name} over 70% used"),
+            Critical => format!("🔔 {provider_name} almost at limit!"),
+        };
+        let mut body = format!("{pct:.0}% used");
+        if let Some(left) = alert_remaining(alert.resets_at, lang) {
+            body.push_str(&format!(" · session reset in {left}"));
+        }
+        (title, body)
+    };
+    let script = format!(
+        "display notification {} with title {} sound name \"Glass\"",
+        apple_script_string(&body),
+        apple_script_string(&title),
+    );
+    let _ = std::process::Command::new("osascript")
+        .args(["-e", &script])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+}
+
 // ── 메뉴바 툴팁 ────────────────────────────────────────────────────────────
 
 pub fn compute_tooltip(

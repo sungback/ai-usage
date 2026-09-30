@@ -92,6 +92,27 @@ impl UsageData {
     }
 }
 
+/// 사용량 임계치 경고 수준 (세션 소진율 기준).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ThresholdLevel {
+    Warn,
+    Critical,
+}
+
+impl ThresholdLevel {
+    pub const WARN_AT: f64 = 70.0;
+    pub const CRITICAL_AT: f64 = 90.0;
+}
+
+/// 새로 임계치를 넘은 공급자 1건.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ThresholdAlert {
+    pub provider: ProviderId,
+    pub level: ThresholdLevel,
+    pub percentage: f64,
+    pub resets_at: Option<SystemTime>,
+}
+
 /// Codex는 상한선 없이 크레딧 잔액만 보고하므로 기준 분모를 학습해야 합니다.
 /// 잔액 증가는 충전으로 간주되며, 그 시점에 기록된 잔액이 다음 충전 전까지
 /// 게이지 측정의 기준점이 됩니다.
@@ -261,6 +282,70 @@ impl AppUsageData {
             .min()
     }
 
+    /// 공급자별 세션 사용량 묶음 (기본 맵 + 선택 계정).
+    fn session_entries(&self) -> Vec<(ProviderId, &UsageData)> {
+        let mut entries: Vec<(ProviderId, &UsageData)> =
+            self.providers.iter().map(|(id, usage)| (*id, usage)).collect();
+        entries.extend(
+            self.accounts
+                .iter()
+                .filter_map(|account| account.usage.as_ref().map(|usage| (account.provider, usage))),
+        );
+        entries
+    }
+
+    /// 해당 공급자의 세션 사용량 중 가장 높은 값.
+    fn session_percentage(&self, provider: ProviderId) -> Option<f64> {
+        self.session_entries()
+            .into_iter()
+            .filter(|(id, _)| *id == provider)
+            .map(|(_, usage)| usage.session.percentage)
+            .max_by(f64::total_cmp)
+    }
+
+    /// 이전 측정치 대비 새로 임계치를 넘은 세션 사용량을 찾는다.
+    /// `previous`가 없으면(첫 폴링) 조용히 넘어가 재시작 스팸을 막고,
+    /// 사용량이 떨어졌다가 다시 오르면 다시 알린다.
+    pub fn threshold_crossings(&self, previous: Option<&Self>) -> Vec<ThresholdAlert> {
+        let Some(previous) = previous else {
+            return Vec::new();
+        };
+        let mut highest: BTreeMap<ProviderId, &UsageData> = BTreeMap::new();
+        for (id, usage) in self.session_entries() {
+            highest
+                .entry(id)
+                .and_modify(|kept| {
+                    if usage.session.percentage > kept.session.percentage {
+                        *kept = usage;
+                    }
+                })
+                .or_insert(usage);
+        }
+        let mut alerts = Vec::new();
+        for (provider, usage) in highest {
+            let next = usage.session.percentage;
+            let (level, threshold) = if next >= ThresholdLevel::CRITICAL_AT {
+                (ThresholdLevel::Critical, ThresholdLevel::CRITICAL_AT)
+            } else if next >= ThresholdLevel::WARN_AT {
+                (ThresholdLevel::Warn, ThresholdLevel::WARN_AT)
+            } else {
+                continue;
+            };
+            let Some(prev) = previous.session_percentage(provider) else {
+                continue;
+            };
+            if prev < threshold {
+                alerts.push(ThresholdAlert {
+                    provider,
+                    level,
+                    percentage: next,
+                    resets_at: usage.session.resets_at,
+                });
+            }
+        }
+        alerts
+    }
+
     /// 캐시된 측정치는 로그인 변경이나 상속된 다른 설정 디렉터리를 넘어서 유지되지 않아야 합니다.
     /// 파일 상태(stat)만 확인하며, CLI나 WSL을 실행하지 않습니다.
     #[cfg(any(target_os = "macos", test))]
@@ -395,6 +480,67 @@ mod tests {
         .collect();
         assert_eq!(data.earliest_session_reset(), Some(near));
         assert_eq!(AppUsageData::default().earliest_session_reset(), None);
+    }
+
+    #[test]
+    fn threshold_crossings_fire_once_per_rising_edge() {
+        let entry = |percentage: f64| UsageData {
+            session: UsageSection {
+                available: true,
+                percentage,
+                resets_at: None,
+            },
+            ..Default::default()
+        };
+        let snapshot = |claude: f64, codex: f64| {
+            [
+                (ProviderId::Claude, entry(claude)),
+                (ProviderId::Codex, entry(codex)),
+            ]
+            .into_iter()
+            .collect::<AppUsageData>()
+        };
+        let levels = |alerts: &[ThresholdAlert]| {
+            alerts
+                .iter()
+                .map(|alert| (alert.provider, alert.level))
+                .collect::<Vec<_>>()
+        };
+
+        // 첫 폴링에서는 조용 (재시작 스팸 방지).
+        assert!(snapshot(95.0, 95.0).threshold_crossings(None).is_empty());
+
+        // 70% 상승 돌파에서 Warn 1건.
+        let prev = snapshot(65.0, 10.0);
+        let next = snapshot(75.0, 10.0);
+        assert_eq!(
+            levels(&next.threshold_crossings(Some(&prev))),
+            [(ProviderId::Claude, ThresholdLevel::Warn)]
+        );
+
+        // 90% 돌파는 Critical 1건만 (Warn 중복 없음).
+        let next = snapshot(95.0, 10.0);
+        let alerts = next.threshold_crossings(Some(&prev));
+        assert_eq!(levels(&alerts), [(ProviderId::Claude, ThresholdLevel::Critical)]);
+        assert_eq!(alerts[0].percentage, 95.0);
+
+        // 이미 넘은 상태에서는 조용.
+        let higher = snapshot(96.0, 10.0);
+        assert!(higher.threshold_crossings(Some(&next)).is_empty());
+
+        // 떨어졌다가 다시 오르면 다시 알림.
+        let dropped = snapshot(10.0, 10.0);
+        assert!(dropped.threshold_crossings(Some(&higher)).is_empty());
+        assert_eq!(
+            levels(&next.threshold_crossings(Some(&dropped))),
+            [(ProviderId::Claude, ThresholdLevel::Critical)]
+        );
+
+        // 공급자가 새로 나타나도 조용 (관측된 상승이 아님).
+        let prev = snapshot(10.0, 10.0);
+        let mut next = prev.clone();
+        next.insert(ProviderId::Cursor, entry(99.0));
+        assert!(next.threshold_crossings(Some(&prev)).is_empty());
     }
     /// 실제 기기의 파일 대신 임시 자격 증명 파일을 사용합니다:
     /// `invalidate_changed_credentials`가 소스를 다시 읽으므로, 두 번의 읽기 사이에

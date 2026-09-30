@@ -2414,6 +2414,7 @@ fn do_poll_once(hwnd: HWND) {
                 .into_iter()
                 .map(|account| (account.provider, account.profile.name.clone()))
                 .collect();
+            let threshold_alerts = data.threshold_crossings(previous.as_ref());
             let language = state
                 .as_ref()
                 .map(|state| state.language)
@@ -2459,6 +2460,65 @@ fn do_poll_once(hwnd: HWND) {
                     .collect::<Vec<_>>()
                     .join("\n");
                 tray_icon::notify_balloon(hwnd, language.text("Sign in again"), &body);
+            }
+            if !threshold_alerts.is_empty() {
+                let title = if language.code() == "ko" {
+                    "🔔 사용량 경고"
+                } else {
+                    "🔔 Usage alert"
+                };
+                let strings = language.strings();
+                let body = threshold_alerts
+                    .iter()
+                    .map(|alert| {
+                        let name = language.text(alert.provider.descriptor().display_name);
+                        let mut line = if language.code() == "ko" {
+                            match alert.level {
+                                crate::models::ThresholdLevel::Warn => {
+                                    format!("{name} 70% 초과 ({:.0}%)", alert.percentage)
+                                }
+                                crate::models::ThresholdLevel::Critical => {
+                                    format!("{name} 한도 임박! ({:.0}%)", alert.percentage)
+                                }
+                            }
+                        } else {
+                            match alert.level {
+                                crate::models::ThresholdLevel::Warn => {
+                                    format!("{name} over 70% ({:.0}%)", alert.percentage)
+                                }
+                                crate::models::ThresholdLevel::Critical => {
+                                    format!("{name} almost at limit! ({:.0}%)", alert.percentage)
+                                }
+                            }
+                        };
+                        if let Some(resets_at) = alert.resets_at {
+                            if let Ok(remaining) = resets_at.duration_since(std::time::SystemTime::now()) {
+                                let total_mins = remaining.as_secs() / 60;
+                                if total_mins > 0 {
+                                    let hours = total_mins / 60;
+                                    let mins = total_mins % 60;
+                                    if language.code() == "ko" {
+                                        if hours > 0 {
+                                            line.push_str(&format!(
+                                                " · {hours}{} {mins}{}",
+                                                strings.hour_suffix, strings.minute_suffix
+                                            ));
+                                        } else {
+                                            line.push_str(&format!(" · {mins}{}", strings.minute_suffix));
+                                        }
+                                    } else if hours > 0 {
+                                        line.push_str(&format!(" · reset in {hours}h {mins}m"));
+                                    } else {
+                                        line.push_str(&format!(" · reset in {mins}m"));
+                                    }
+                                }
+                            }
+                        }
+                        line
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                tray_icon::notify_balloon(hwnd, title, &body);
             }
 
             unsafe {
