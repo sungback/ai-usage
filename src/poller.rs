@@ -505,3 +505,26 @@ pub fn app_is_past_reset(data: &AppUsageData) -> bool {
 
 #[cfg(test)]
 mod tests;
+
+// ---------------------------------------------------------------------------
+// Windows 자식 프로세스 공통 헬퍼
+// claude.rs · codex.rs 등 CLI를 호출하는 폴러가 공유합니다.
+// ---------------------------------------------------------------------------
+
+#[cfg(windows)]
+pub(super) const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+pub(super) trait CommandExtHelper {
+    fn no_window(&mut self) -> &mut Self;
+}
+
+impl CommandExtHelper for std::process::Command {
+    fn no_window(&mut self) -> &mut Self {
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            self.creation_flags(CREATE_NO_WINDOW);
+        }
+        self
+    }
+}

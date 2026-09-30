@@ -1,5 +1,3 @@
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -11,37 +9,12 @@ use super::{
     build_agent, get_header_f64, get_header_i64, parse_iso8601, unix_to_system_time, HttpResponse,
     PollError,
 };
+use super::CommandExtHelper;
 use crate::models::{CreditsSection, UsageData};
 
 const USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
 const MESSAGES_URL: &str = "https://api.anthropic.com/v1/messages";
 const MODEL_FALLBACK_CHAIN: &[&str] = &["claude-3-haiku-20240307", "claude-haiku-4-5-20251001"];
-
-#[cfg(windows)]
-const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-trait CommandExtHelper {
-    fn no_window(&mut self) -> &mut Self;
-}
-
-impl CommandExtHelper for Command {
-    fn no_window(&mut self) -> &mut Self {
-//! Claude 사용량 폴러 — 처음 보시는 분을 위한 안내.
-//!
-//! - 순서: 로컬 자격 증명(또는 데스크톱 앱 토큰) 읽기 → 사용량 API 호출 →
-//!   5시간·7일 구간 꺼내기.
-//! - Windows에서는 CLI를 띄울 때 새 창이 안 뜨게 `no_window`로 감쌉니다.
-
-#[cfg(windows)]
-        {
-            self.creation_flags(CREATE_NO_WINDOW)
-        }
-        #[cfg(not(windows))]
-        {
-            self
-        }
-    }
-}
 
 #[derive(Deserialize)]
 struct UsageResponse {
