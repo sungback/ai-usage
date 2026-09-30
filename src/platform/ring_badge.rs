@@ -10,6 +10,32 @@ use crate::app_settings::SettingsFile;
 use crate::models::{AppUsageData, UsageData};
 use crate::providers::ProviderId;
 
+/// 단일 링 배지의 여섯 값 묶음 (세션·주간 채움률, 바깥·안쪽 색, 중앙 숫자, 숫자 색).
+type RingDatum = (f64, f64, Rgba<u8>, Rgba<u8>, Option<String>, Rgba<u8>);
+
+/// 단일 링 쌍 렌더링 파라미터 묶음 (clippy too_many_arguments 회피).
+pub struct RingPairParams<'a> {
+    pub size: u32,
+    pub session_fill: f64,
+    pub weekly_fill: f64,
+    pub outer_color: Rgba<u8>,
+    pub inner_color: Rgba<u8>,
+    pub center_text: Option<&'a str>,
+    pub text_color: Rgba<u8>,
+    pub font: Option<&'a Font>,
+    pub show_inner_ring: bool,
+}
+
+/// 중앙 숫자 렌더링 파라미터 묶음 (clippy too_many_arguments 회피).
+pub struct CenteredNumberParams<'a> {
+    pub text: &'a str,
+    pub cx: f32,
+    pub cy: f32,
+    pub color: Rgba<u8>,
+    pub large: bool,
+    pub scale_factor: f32,
+}
+
 /// Brand theme color palettes for concentric ring pairs (outer 5H, inner 7D) per provider.
 pub fn provider_ring_palette(provider: ProviderId) -> (Rgba<u8>, Rgba<u8>) {
     match provider {
@@ -140,17 +166,13 @@ pub fn blend_pixel(img: &mut RgbaImage, x: u32, y: u32, color: Rgba<u8>, glyph_a
 pub fn draw_centered_number(
     img: &mut RgbaImage,
     font: &Font,
-    text: &str,
-    cx: f32,
-    cy: f32,
-    color: Rgba<u8>,
-    large: bool,
-    scale_factor: f32,
+    params: &CenteredNumberParams,
 ) {
+    let text = params.text;
     if text.is_empty() {
         return;
     }
-    let base_size = if large {
+    let base_size = if params.large {
         match text.len() {
             1 => 21.0,
             2 => 18.5,
@@ -163,7 +185,7 @@ pub fn draw_centered_number(
             _ => 10.0,
         }
     };
-    let font_size = base_size * scale_factor;
+    let font_size = base_size * params.scale_factor;
 
     struct GlyphPixel {
         px_rel: f32,
@@ -212,14 +234,14 @@ pub fn draw_centered_number(
     let mid_x = (min_x + max_x) / 2.0;
     let mid_y = (min_y + max_y) / 2.0;
 
-    let offset_x = cx - mid_x;
-    let offset_y = cy - mid_y;
+    let offset_x = params.cx - mid_x;
+    let offset_y = params.cy - mid_y;
 
     for p in pixels {
         let px = (offset_x + p.px_rel).round() as i32;
         let py = (offset_y + p.py_rel).round() as i32;
         if px >= 0 && px < img.width() as i32 && py >= 0 && py < img.height() as i32 {
-            blend_pixel(img, px as u32, py as u32, color, p.alpha);
+            blend_pixel(img, px as u32, py as u32, params.color, p.alpha);
         }
     }
 }
@@ -244,17 +266,16 @@ fn scale_alpha(color: Rgba<u8>, factor: f64) -> Rgba<u8> {
 /// Render a single ring pair (outer + inner concentric arcs) into a square image of `size` x `size`.
 ///
 /// `session_fill` and `weekly_fill` are 0.0..=1.0 fractions.
-pub fn render_single_ring_pair(
-    size: u32,
-    session_fill: f64,
-    weekly_fill: f64,
-    outer_color: Rgba<u8>,
-    inner_color: Rgba<u8>,
-    center_text: Option<&str>,
-    text_color: Rgba<u8>,
-    font: Option<&Font>,
-    show_inner_ring: bool,
-) -> RgbaImage {
+pub fn render_single_ring_pair(params: &RingPairParams) -> RgbaImage {
+    let size = params.size;
+    let session_fill = params.session_fill;
+    let weekly_fill = params.weekly_fill;
+    let outer_color = params.outer_color;
+    let inner_color = params.inner_color;
+    let center_text = params.center_text;
+    let text_color = params.text_color;
+    let font = params.font;
+    let show_inner_ring = params.show_inner_ring;
     let mut img = RgbaImage::new(size, size);
     let center = size as f64 / 2.0;
     let scale = size as f64 / 44.0;
@@ -320,12 +341,14 @@ pub fn render_single_ring_pair(
         draw_centered_number(
             &mut img,
             f,
-            text,
-            center as f32,
-            center as f32,
-            text_color,
-            !show_inner_ring,
-            scale as f32,
+            &CenteredNumberParams {
+                text,
+                cx: center as f32,
+                cy: center as f32,
+                color: text_color,
+                large: !show_inner_ring,
+                scale_factor: scale as f32,
+            },
         );
     }
 
@@ -375,17 +398,17 @@ pub fn render_single_provider_ring(
         .and_then(parse_hex_color)
         .unwrap_or_else(|| provider_text_color(provider_id));
 
-    render_single_ring_pair(
+    render_single_ring_pair(&RingPairParams {
         size,
-        s_fill,
-        w_fill,
-        outer_c,
-        inner_c,
-        center_num.as_deref(),
+        session_fill: s_fill,
+        weekly_fill: w_fill,
+        outer_color: outer_c,
+        inner_color: inner_c,
+        center_text: center_num.as_deref(),
         text_color,
-        font.as_ref(),
+        font: font.as_ref(),
         show_inner_ring,
-    )
+    })
 }
 
 /// Render the full ring badge image with customizable ring size and gap.
@@ -403,7 +426,7 @@ pub fn render_ring_badge_image_at_size(
 
     let ordered_providers = settings.ordered_providers();
 
-    let mut ring_data: Vec<(f64, f64, Rgba<u8>, Rgba<u8>, Option<String>, Rgba<u8>)> = Vec::new();
+    let mut ring_data: Vec<RingDatum> = Vec::new();
 
     for provider_id in ordered_providers {
         if !settings.provider_enabled(provider_id) {
@@ -475,17 +498,17 @@ pub fn render_ring_badge_image_at_size(
     for (i, (s_fill, w_fill, outer_c, inner_c, center_num, text_color)) in
         ring_data.iter().enumerate()
     {
-        let ring_img = render_single_ring_pair(
-            ring_size,
-            *s_fill,
-            *w_fill,
-            *outer_c,
-            *inner_c,
-            center_num.as_deref(),
-            *text_color,
-            font.as_ref(),
+        let ring_img = render_single_ring_pair(&RingPairParams {
+            size: ring_size,
+            session_fill: *s_fill,
+            weekly_fill: *w_fill,
+            outer_color: *outer_c,
+            inner_color: *inner_c,
+            center_text: center_num.as_deref(),
+            text_color: *text_color,
+            font: font.as_ref(),
             show_inner_ring,
-        );
+        });
         let x_offset = (i as u32) * (ring_size + gap);
         for ry in 0..ring_size {
             for rx in 0..ring_size {
@@ -547,62 +570,62 @@ mod tests {
         let font = load_system_font();
 
         // 1. Dual-ring mode
-        let img_dual = render_single_ring_pair(
-            44,
-            0.85,
-            0.50,
-            Rgba([249, 115, 22, 255]),
-            Rgba([251, 191, 36, 255]),
-            Some("85"),
-            Rgba([245, 245, 245, 255]),
-            font.as_ref(),
-            true,
-        );
+        let img_dual = render_single_ring_pair(&RingPairParams {
+            size: 44,
+            session_fill: 0.85,
+            weekly_fill: 0.50,
+            outer_color: Rgba([249, 115, 22, 255]),
+            inner_color: Rgba([251, 191, 36, 255]),
+            center_text: Some("85"),
+            text_color: Rgba([245, 245, 245, 255]),
+            font: font.as_ref(),
+            show_inner_ring: true,
+        });
         assert_eq!(img_dual.width(), 44);
         assert_eq!(img_dual.height(), 44);
 
         // 2. Single-ring mode (inner ring disabled)
-        let img_single = render_single_ring_pair(
-            44,
-            0.85,
-            0.50,
-            Rgba([249, 115, 22, 255]),
-            Rgba([251, 191, 36, 255]),
-            Some("85"),
-            Rgba([245, 245, 245, 255]),
-            font.as_ref(),
-            false,
-        );
+        let img_single = render_single_ring_pair(&RingPairParams {
+            size: 44,
+            session_fill: 0.85,
+            weekly_fill: 0.50,
+            outer_color: Rgba([249, 115, 22, 255]),
+            inner_color: Rgba([251, 191, 36, 255]),
+            center_text: Some("85"),
+            text_color: Rgba([245, 245, 245, 255]),
+            font: font.as_ref(),
+            show_inner_ring: false,
+        });
         assert_eq!(img_single.width(), 44);
         assert_eq!(img_single.height(), 44);
 
         // 3. 32px Windows tray icon size (dual ring)
-        let img_32_dual = render_single_ring_pair(
-            32,
-            0.85,
-            0.45,
-            Rgba([249, 115, 22, 255]),
-            Rgba([251, 191, 36, 255]),
-            Some("85"),
-            Rgba([245, 245, 245, 255]),
-            font.as_ref(),
-            true,
-        );
+        let img_32_dual = render_single_ring_pair(&RingPairParams {
+            size: 32,
+            session_fill: 0.85,
+            weekly_fill: 0.45,
+            outer_color: Rgba([249, 115, 22, 255]),
+            inner_color: Rgba([251, 191, 36, 255]),
+            center_text: Some("85"),
+            text_color: Rgba([245, 245, 245, 255]),
+            font: font.as_ref(),
+            show_inner_ring: true,
+        });
         assert_eq!(img_32_dual.width(), 32);
         assert_eq!(img_32_dual.height(), 32);
 
         // 4. 32px Windows tray icon size (single ring enlarged number)
-        let img_32_single = render_single_ring_pair(
-            32,
-            0.85,
-            0.45,
-            Rgba([249, 115, 22, 255]),
-            Rgba([251, 191, 36, 255]),
-            Some("85"),
-            Rgba([245, 245, 245, 255]),
-            font.as_ref(),
-            false,
-        );
+        let img_32_single = render_single_ring_pair(&RingPairParams {
+            size: 32,
+            session_fill: 0.85,
+            weekly_fill: 0.45,
+            outer_color: Rgba([249, 115, 22, 255]),
+            inner_color: Rgba([251, 191, 36, 255]),
+            center_text: Some("85"),
+            text_color: Rgba([245, 245, 245, 255]),
+            font: font.as_ref(),
+            show_inner_ring: false,
+        });
         assert_eq!(img_32_single.width(), 32);
         assert_eq!(img_32_single.height(), 32);
 
@@ -644,17 +667,17 @@ mod tests {
     #[test]
     fn test_ring_badge_track_alpha_preservation() {
         // Render a 44px ring with 0% fill so only the track (alpha 60) is rendered.
-        let img = render_single_ring_pair(
-            44,
-            0.0,
-            0.0,
-            Rgba([249, 115, 22, 255]),
-            Rgba([251, 191, 36, 255]),
-            None,
-            Rgba([255, 255, 255, 255]),
-            None,
-            true,
-        );
+        let img = render_single_ring_pair(&RingPairParams {
+            size: 44,
+            session_fill: 0.0,
+            weekly_fill: 0.0,
+            outer_color: Rgba([249, 115, 22, 255]),
+            inner_color: Rgba([251, 191, 36, 255]),
+            center_text: None,
+            text_color: Rgba([255, 255, 255, 255]),
+            font: None,
+            show_inner_ring: true,
+        });
 
         // Find pixels in the track region (outer ring stroke).
         // center is 22.0, outer ring is near radius ~19..20.
@@ -668,7 +691,7 @@ mod tests {
                 let dy = y as f64 + 0.5 - center;
                 let dist = (dx * dx + dy * dy).sqrt();
                 // Outer ring track radius
-                if dist >= 17.5 && dist <= 20.0 {
+                if (17.5..=20.0).contains(&dist) {
                     let pixel = img.get_pixel(x, y);
                     if pixel[3] > max_track_alpha {
                         max_track_alpha = pixel[3];
@@ -698,7 +721,7 @@ mod tests {
                 let dx = x as f64 + 0.5 - center;
                 let dy = y as f64 + 0.5 - center;
                 let dist = (dx * dx + dy * dy).sqrt();
-                if dist >= 17.5 && dist <= 20.0 {
+                if (17.5..=20.0).contains(&dist) {
                     let pixel = combined.get_pixel(x, y);
                     if pixel[3] > max_combined_track_alpha {
                         max_combined_track_alpha = pixel[3];

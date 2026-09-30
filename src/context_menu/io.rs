@@ -15,27 +15,24 @@ pub fn ensure_builtin_context_menus() -> Result<PathBuf, String> {
     std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
 
     let mut classic_path = None;
-    for document in [classic_context_menu()] {
-        let errors = document.validate();
-        if !errors.is_empty() {
-            return Err(errors.join("\n"));
-        }
-        let path = directory.join(format!("{}.json", document.id));
-        let canonical = serde_json::to_vec_pretty(&document).map_err(|e| e.to_string())?;
-        if std::fs::read(&path).ok().as_deref() != Some(canonical.as_slice()) {
-            crate::app_settings::write_json_atomic(&path, &document)?;
-        }
-        if document.id == CLASSIC_CONTEXT_MENU_ID {
-            classic_path = Some(path);
-        }
+    let document = classic_context_menu();
+    let errors = document.validate();
+    if !errors.is_empty() {
+        return Err(errors.join("\n"));
+    }
+    let path = directory.join(format!("{}.json", document.id));
+    let canonical = serde_json::to_vec_pretty(&document).map_err(|e| e.to_string())?;
+    if std::fs::read(&path).ok().as_deref() != Some(canonical.as_slice()) {
+        crate::app_settings::write_json_atomic(&path, &document)?;
+    }
+    if document.id == CLASSIC_CONTEXT_MENU_ID {
+        classic_path = Some(path);
     }
 
     // 레거시 파일 삭제
-    for legacy_id in [LEGACY_CLASSIC_CONTEXT_MENU_ID] {
-        let legacy_path = directory.join(format!("{legacy_id}.json"));
-        match std::fs::remove_file(legacy_path) {
-            Ok(()) | Err(_) => {}
-        }
+    let legacy_path = directory.join(format!("{LEGACY_CLASSIC_CONTEXT_MENU_ID}.json"));
+    match std::fs::remove_file(legacy_path) {
+        Ok(()) | Err(_) => {}
     }
 
     classic_path.ok_or_else(|| "The Classic context menu could not be created".into())

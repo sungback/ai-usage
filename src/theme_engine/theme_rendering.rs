@@ -26,28 +26,23 @@ pub fn surface_horizontal_padding(
 }
 
 pub fn format_template(template: &str, context: &DataContext) -> String {
-    let mut output = String::new();
-    let chars: Vec<char> = template.chars().collect();
-    let mut index = 0;
-    while index < chars.len() {
-        if chars[index] == '{' && index + 1 < chars.len() && chars[index + 1] == '{' {
+    let mut output = String::with_capacity(template.len());
+    let mut rest = template;
+    while let Some(open) = rest.find('{') {
+        output.push_str(&rest[..open]);
+        let after = &rest[open..];
+        if let Some(stripped) = after.strip_prefix("{{") {
             output.push('{');
-            index += 2;
+            rest = stripped;
             continue;
         }
-        if chars[index] != '{' {
-            output.push(chars[index]);
-            index += 1;
-            continue;
-        }
-        let Some(relative_end) = chars[index + 1..].iter().position(|c| *c == '}') else {
-            output.push(chars[index]);
-            index += 1;
+        let Some(close) = after.find('}') else {
+            output.push('{');
+            rest = &after[1..];
             continue;
         };
-        let end = index + 1 + relative_end;
-        let token: String = chars[index + 1..end].iter().collect();
-        let (expression, format) = split_template_token(&token);
+        let token = &after[1..close];
+        let (expression, format) = split_template_token(token);
         let expression = expression.trim();
         let format = format.trim();
         if let Some(value) = context.get_string(expression) {
@@ -66,8 +61,9 @@ pub fn format_template(template: &str, context: &DataContext) -> String {
                 Err(_) => output.push_str("--"),
             }
         }
-        index = end + 1;
+        rest = &after[close + 1..];
     }
+    output.push_str(rest);
     output
 }
 

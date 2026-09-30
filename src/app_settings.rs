@@ -348,8 +348,8 @@ pub struct UsageCache {
 pub fn app_data_directory() -> PathBuf {
     let root = std::env::var_os("APPDATA")
         .map(PathBuf::from)
-        .or_else(|| dirs::data_dir())
-        .or_else(|| dirs::config_dir())
+        .or_else(dirs::data_dir)
+        .or_else(dirs::config_dir)
         .unwrap_or_else(|| PathBuf::from("."));
     root.join("ai-usage")
 }

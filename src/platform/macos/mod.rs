@@ -10,7 +10,7 @@ pub mod tray;
 
 pub use startup::{is_startup_enabled, set_startup_enabled};
 pub use tray::{
-    app_version_label, build_context_menu, compute_tooltip, render_compact_menu_badge,
+    build_context_menu, compute_tooltip, render_compact_menu_badge,
 };
 
 use std::sync::mpsc;
@@ -62,10 +62,10 @@ impl MacOsMonitorApp {
         );
 
         let menu = build_context_menu(&self.current_usage, &self.available_update, &settings, lang);
-        let _ = tray.set_menu(Some(Box::new(menu)));
+        tray.set_menu(Some(Box::new(menu)));
 
         let badge_icon = render_compact_menu_badge(&self.current_usage, &settings);
-        let _ = tray.set_icon_as_template(false);
+        tray.set_icon_as_template(false);
         let _ = tray.set_icon(Some(badge_icon));
         tray.set_title::<&str>(None);
 
@@ -385,15 +385,17 @@ mod tests {
     #[test]
     fn test_render_single_ring_pair() {
         let img = render_single_ring_pair(
-            44,
-            0.67,
-            0.75,
-            Rgba([74, 144, 217, 255]),
-            Rgba([74, 222, 128, 255]),
-            None,
-            Rgba([245, 245, 245, 255]),
-            None,
-            true,
+            &crate::platform::ring_badge::RingPairParams {
+                size: 44,
+                session_fill: 0.67,
+                weekly_fill: 0.75,
+                outer_color: Rgba([74, 144, 217, 255]),
+                inner_color: Rgba([74, 222, 128, 255]),
+                center_text: None,
+                text_color: Rgba([245, 245, 245, 255]),
+                font: None,
+                show_inner_ring: true,
+            },
         );
         assert_eq!(img.width(), 44);
         assert_eq!(img.height(), 44);
@@ -423,7 +425,7 @@ mod tests {
 
     #[test]
     fn test_app_version_label_tracks_package_version() {
-        let label = app_version_label();
+        let label = tray::app_version_label();
         assert!(label.starts_with("AI Usage Monitor v"));
         assert!(label.contains(env!("CARGO_PKG_VERSION")));
     }
