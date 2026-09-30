@@ -124,7 +124,7 @@ fn tray_rect_changed_detects_all_edge_shifts() {
     assert!(rect_changed(None, Some(base)));
     assert!(rect_changed(Some(base), None));
 
-    // Left edge changes when icons appear or hide
+    // 아이콘이 나타나거나 숨겨질 때 왼쪽 가장자리가 변경됨
     let expanded = RECT {
         left: 1576,
         top: 0,
@@ -149,7 +149,7 @@ fn is_tray_event_source_identifies_tray_and_excludes_own_windows() {
     let dummy_taskbar = HWND(0x3000 as _);
     let dummy_other = HWND(0x4000 as _);
 
-    // Invalid HWND should be ignored
+    // 유효하지 않은 HWND는 무시되어야 함
     assert!(!is_tray_event_source(
         HWND::default(),
         Some(dummy_tray),
@@ -157,7 +157,7 @@ fn is_tray_event_source_identifies_tray_and_excludes_own_windows() {
         &[dummy_our],
     ));
 
-    // Own windows must be excluded
+    // 자신의 윈도우는 제외되어야 함
     assert!(!is_tray_event_source(
         dummy_our,
         Some(dummy_tray),
@@ -165,7 +165,7 @@ fn is_tray_event_source_identifies_tray_and_excludes_own_windows() {
         &[dummy_our],
     ));
 
-    // TrayNotifyWnd itself is accepted
+    // TrayNotifyWnd 자체는 허용됨
     assert!(is_tray_event_source(
         dummy_tray,
         Some(dummy_tray),
@@ -173,7 +173,7 @@ fn is_tray_event_source_identifies_tray_and_excludes_own_windows() {
         &[dummy_our],
     ));
 
-    // Taskbar itself is accepted
+    // 작업 표시줄 자체는 허용됨
     assert!(is_tray_event_source(
         dummy_taskbar,
         Some(dummy_tray),
@@ -181,7 +181,7 @@ fn is_tray_event_source_identifies_tray_and_excludes_own_windows() {
         &[dummy_our],
     ));
 
-    // Unrelated top-level window is ignored
+    // 무관한 최상위 윈도우는 무시됨
     assert!(!is_tray_event_source(
         dummy_other,
         Some(dummy_tray),
@@ -199,7 +199,7 @@ fn test_calculate_rect_overlap_ratio() {
         bottom: 50,
     }; // width 100, height 50, area 5000
 
-    // Complete overlap
+    // 완전 겹침
     let target_full = RECT {
         left: 50,
         top: 0,
@@ -208,7 +208,7 @@ fn test_calculate_rect_overlap_ratio() {
     };
     assert!((positioning::calculate_rect_overlap_ratio(widget, target_full) - 1.0).abs() < 1e-4);
 
-    // No overlap
+    // 전혀 겹치지 않음
     let target_none = RECT {
         left: 300,
         top: 0,
@@ -220,7 +220,7 @@ fn test_calculate_rect_overlap_ratio() {
         0.0
     );
 
-    // 70% overlap (width 70 overlap across full height 50)
+    // 70% 겹침 (전체 높이 50에 걸쳐 너비 70 겹침)
     let target_70 = RECT {
         left: 130,
         top: 0,
@@ -231,7 +231,7 @@ fn test_calculate_rect_overlap_ratio() {
     assert!((ratio - 0.70).abs() < 1e-4);
     assert!(ratio >= 0.67); // Triggers snap
 
-    // 40% overlap
+    // 40% 겹침
     let target_40 = RECT {
         left: 160,
         top: 0,
@@ -245,7 +245,7 @@ fn test_calculate_rect_overlap_ratio() {
 
 #[test]
 fn test_is_taskbar_capacity_sufficient() {
-    // Horizontal taskbar 1920x48
+    // 가로 작업 표시줄 1920x48
     let taskbar_h = RECT {
         left: 0,
         top: 0,
@@ -278,7 +278,7 @@ fn test_is_taskbar_capacity_sufficient() {
         46
     ));
 
-    // Vertical taskbar 48x1080
+    // 세로 작업 표시줄 48x1080
     let taskbar_v = RECT {
         left: 0,
         top: 0,
@@ -291,7 +291,7 @@ fn test_is_taskbar_capacity_sufficient() {
         right: 48,
         bottom: 800,
     };
-    // Album widget width 250 cannot fit in 48px width
+    // 앨범 위젯 너비 250은 48px 너비에 들어갈 수 없음
     assert!(!positioning::is_taskbar_capacity_sufficient(
         taskbar_v,
         free_slot_v,
@@ -441,8 +441,8 @@ fn drag_release_snapshots_state_before_reentrant_capture_change() {
                 DragRelease::take(dragging, pending, snapped)
             },
             || {
-                // ReleaseCapture can synchronously re-enter the window procedure.
-                // Reborrow also proves the snapshot's guard has been dropped.
+                // ReleaseCapture는 윈도우 프로시저에 동기적으로 재진입할 수 있습니다.
+                // 다시 빌리는 것(reborrow)은 스냅샷 가드가 해제되었음을 증명합니다.
                 assert_eq!(*live.borrow(), DragRelease::default());
                 *live.borrow_mut() = DragRelease::default();
                 release_calls.set(release_calls.get() + 1);
@@ -594,7 +594,7 @@ fn tasklist_boundary_ignores_stretched_containers_and_uses_real_app_edges() {
     );
 }
 
-// Exercise the actual restored-rectangle check with a tray-adjacent widget.
+// 트레이에 인접한 위젯을 사용하여 실제 복원된 사각형 검사를 수행합니다.
 fn can_redock_at_tray(free_space: i32, width: i32) -> bool {
     let taskbar = RECT {
         left: 0,

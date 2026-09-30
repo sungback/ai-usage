@@ -1880,8 +1880,8 @@ fn resolve_startup_config() -> StartupConfig {
                 Err(_) => {}
             }
         } else {
-            // An explicitly visible v1.4.9 widget already matches the
-            // built-in theme's Render value, so no copy is necessary.
+            // 명시적으로 표시되던 v1.4.9 위젯은 이미 내장 테마의
+            // Render 값과 일치하므로 복사본을 생성할 필요가 없습니다.
             settings.consume_legacy_widget_visibility();
             save_settings_or_log(&settings, "unable to consume legacy visibility");
         }
@@ -2046,20 +2046,20 @@ fn run_startup_tasks(hwnd: HWND, no_poll: bool) {
     sync_custom_mirrors();
     native_interop::make_popup(hwnd, false);
 
-    // Register the persistent application tray icon.
+    // 영속 애플리케이션 트레이 아이콘을 등록합니다.
     if !no_poll {
         sync_tray_icon(hwnd);
     }
 
-    // Theme surfaces decide whether their windows render.
+    // 테마 서피스가 해당 윈도우의 렌더링 여부를 결정합니다.
     position_at_taskbar();
 
-    // Initial render using the presenter selected by the surface nest.
+    // 서피스 중첩(nest)에 의해 선택된 프레젠터를 사용하여 최초 렌더링을 수행합니다.
     render_layered();
     schedule_countdown_timer();
     schedule_clock_timer();
 
-    // Poll timer, using the interval from settings.
+    // 설정에 지정된 주기를 사용하는 폴링 타이머입니다.
     let initial_poll_ms = {
         let state = lock_state();
         state
@@ -2072,14 +2072,13 @@ fn run_startup_tasks(hwnd: HWND, no_poll: bool) {
     }
     sync_window_state_timer(hwnd);
 
-    // Watch for explorer.exe restarts so we can re-embed and re-add the tray
-    // icon (the shell discards tray registrations when it restarts). This
-    // runs on a dedicated thread, NOT a window timer: once explorer destroys
-    // the taskbar, our embedded child window stops receiving all messages
-    // (WM_TIMER included), so a timer would never fire again.
+    // explorer.exe 재시작을 감시하여 트레이 아이콘을 다시 임베드하고 다시 추가할 수 있도록 합니다
+    // (셸이 재시작되면 트레이 등록 정보가 폐기됩니다). 이것은 윈도우 타이머가 아닌 전용 스레드에서
+    // 실행됩니다: 탐색기가 작업 표시줄을 파괴하면 임베드된 자식 윈도우는 모든 메시지(WM_TIMER 포함)
+    // 수신을 중단하므로, 타이머로는 다시 동작할 수 없기 때문입니다.
     spawn_taskbar_watchdog();
 
-    // Initial poll
+    // 최초 폴링
     if !no_poll {
         request_poll(hwnd);
     }
@@ -2098,7 +2097,7 @@ fn run_startup_tasks(hwnd: HWND, no_poll: bool) {
         begin_update_check(hwnd, false);
     }
 
-    // Initial theme check
+    // 최초 테마 확인
     check_theme_change();
 }
 
@@ -2127,7 +2126,7 @@ pub fn run() {
     let config = resolve_startup_config();
     refresh_theme_host_geometry();
 
-    // Create as layered popup (will be reparented into taskbar)
+    // 레이어드 팝업으로 생성 (이후 작업 표시줄의 자식으로 부모 재지정됨)
     let title = native_interop::wide_str(config.language.strings().window_title);
     let initial_runtime = ThemeRuntime::from_providers(config.settings.enabled_providers())
         .with_poll_state(false, false)
@@ -2148,8 +2147,8 @@ pub fn run() {
     run_message_loop();
 }
 
-/// Render every theme surface, then dispatch it to the presenter selected by
-/// its nest: DirectComposition for desktop and layered windows elsewhere.
+/// 모든 테마 서피스를 렌더링한 후, 중첩(nest)에 의해 선택된 프레젠터로 전달합니다:
+/// 데스크톱의 경우 DirectComposition, 그 외는 레이어드 윈도우 방식을 사용합니다.
 fn render_layered() {
     refresh_dpi();
     sync_custom_mirrors();
@@ -2169,8 +2168,8 @@ fn render_layered() {
         )
     };
 
-    // Theme rendering is the widget renderer. Startup and theme changes always
-    // install Classic in memory when a selected theme cannot be loaded.
+    // 테마 렌더링은 위젯 렌더러입니다. 시작 시 및 테마 변경 시 선택한 테마를
+    // 로드할 수 없으면 메모리에 항상 Classic 테마를 설정합니다.
     let theme = active_theme.unwrap_or_else(ThemeDocument::starter);
     let hwnd = hwnd_val.to_hwnd();
     set_window_state_timer(hwnd, theme_has_floating_surface(&theme));
@@ -2338,7 +2337,7 @@ fn request_poll(hwnd: HWND) {
     request_poll_inner(hwnd, true);
 }
 
-/// Request a timer-driven poll without extending an already-running poll cycle.
+/// 이미 실행 중인 폴링 주기를 연장하지 않고 타이머 기반 폴링을 요청합니다.
 fn request_scheduled_poll(hwnd: HWND) {
     request_poll_inner(hwnd, false);
 }
@@ -2369,9 +2368,8 @@ fn poll_worker(send_hwnd: SendHwnd) {
             break;
         }
 
-        // A request can arrive between the pending check and releasing the
-        // in-flight flag. Reacquire ownership unless that request already
-        // started a replacement worker.
+        // 대기 확인(pending check)과 진행 중(in-flight) 플래그 해제 사이에 새로운 요청이 도착할 수 있습니다.
+        // 해당 요청이 이미 대체 워커를 시작하지 않은 한 다시 소유권을 획득합니다.
         if POLL_IN_FLIGHT
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
             .is_err()
@@ -2422,7 +2420,7 @@ fn do_poll_once(hwnd: HWND) {
                 .unwrap_or(LanguageId::Korean);
             let cache_data = data.clone();
             if let Some(s) = state.as_mut() {
-                // Stop fast-poll if reset data is now fresh
+                // 리셋 데이터가 최신 상태가 되면 고속 폴링 중지
                 if !poller::app_is_past_reset(&data) {
                     unsafe {
                         let _ = KillTimer(Some(hwnd), TIMER_RESET_POLL);
@@ -2432,7 +2430,7 @@ fn do_poll_once(hwnd: HWND) {
                 s.data = Some(data);
                 s.last_poll_ok = true;
 
-                // Recovered from errors — restore normal poll interval
+                // 오류에서 복구됨 — 정상 폴링 주기로 복원
                 if s.retry_count > 0 {
                     s.retry_count = 0;
                     let interval = s.poll_interval_ms;
@@ -2487,7 +2485,7 @@ fn do_poll_once(hwnd: HWND) {
                 }
                 poller::PollError::RequestFailed | poller::PollError::HttpStatus(_) => None,
             };
-            // Distinguish auth-required errors from transient errors.
+            // 인증 필요 오류와 일시적 오류를 구분합니다.
             let (notify_auth_error, cache_data, cache_poll_ok) = {
                 let mut state = lock_state();
                 if state
@@ -2511,7 +2509,7 @@ fn do_poll_once(hwnd: HWND) {
                     s.last_poll_ok = false;
                     match auth_watch {
                         Some((watch_mode, watch_snapshot)) => {
-                            // Only show the balloon on the first failure so it doesn't spam.
+                            // 반복적인 스팸을 방지하기 위해 첫 번째 실패 시에만 말풍선 알림을 표시합니다.
                             if s.retry_count == 0 || force {
                                 should_notify = true;
                             }
@@ -2527,7 +2525,7 @@ fn do_poll_once(hwnd: HWND) {
                             }
                         }
                         _ => {
-                            // Transient network / credential-missing errors: exponential backoff.
+                            // 일시적인 네트워크 / 인증 정보 누락 오류: 지수 백오프 적용.
                             s.auth_error_paused_polling = false;
                             s.auth_watch_mode = poller::CredentialWatchMode::ActiveSource(
                                 s.providers.first().unwrap_or_default(),
@@ -2560,9 +2558,8 @@ fn do_poll_once(hwnd: HWND) {
                 });
                 (should_notify, cache_data, cache_poll_ok)
             };
-            // The monitor follows this cache. A
-            // transient failure with usable stale data remains displayable;
-            // hard failures and failures without a reading stay errors.
+            // 모니터는 이 캐시를 따릅니다. 사용 가능한 이전 데이터가 있는
+            // 일시적 오류는 계속 표시될 수 있으며, 치명적 오류나 읽을 수 없는 실패는 오류 상태로 유지됩니다.
             let _ = app_settings::save_usage_cache(&cache_data, cache_poll_ok);
 
             if notify_auth_error {
@@ -2600,7 +2597,7 @@ fn schedule_countdown_timer() {
         return;
     }
 
-    // If a reset time has passed, poll every 5s to pick up fresh data
+    // 리셋 시간이 지난 경우 최신 데이터를 가져오기 위해 5초마다 폴링
     if s.data.as_ref().is_some_and(poller::app_is_past_reset) {
         unsafe {
             SetTimer(Some(hwnd), TIMER_RESET_POLL, 5_000, None);

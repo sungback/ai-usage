@@ -12,7 +12,7 @@ const REGISTRY_PATH: &str = r"Software\Microsoft\Windows\CurrentVersion\Themes\P
 #[cfg(windows)]
 const REGISTRY_KEY: &str = "SystemUsesLightTheme";
 
-/// Check if the system is in dark mode
+/// 시스템이 다크 모드인지 확인합니다.
 #[cfg(windows)]
 pub fn is_dark_mode() -> bool {
     !is_light_theme()

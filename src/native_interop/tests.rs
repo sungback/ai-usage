@@ -65,8 +65,8 @@ fn detaching_a_child_never_exposes_parent_relative_coordinates_as_a_popup() {
         });
         assert_ne!(atom, 0);
 
-        // Transparent, non-activating private windows exercise the real Win32
-        // transition without touching Explorer or displaying a test window.
+        // 투명하고 비활성화 상태의 전용 윈도우를 사용하여 Explorer를 건드리거나
+        // 테스트 윈도우를 화면에 표시하지 않고도 실제 Win32 전환 동작을 테스트합니다.
         let parent = TestWindow(
             CreateWindowExW(
                 WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,

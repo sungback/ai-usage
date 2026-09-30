@@ -5,12 +5,12 @@
 
 #![cfg_attr(not(windows), allow(dead_code))]
 
-// Window style constants
+// 윈도우 스타일 상수
 pub const WS_POPUP_STYLE: u32 = 0x80000000;
 pub const WS_CHILD_STYLE: u32 = 0x40000000;
 pub const WS_CLIPSIBLINGS_STYLE: u32 = 0x04000000;
 
-// Timer IDs
+// 타이머 ID
 pub const TIMER_POLL: usize = 1;
 pub const TIMER_COUNTDOWN: usize = 2;
 pub const TIMER_RESET_POLL: usize = 3;
@@ -21,7 +21,7 @@ pub const TIMER_TRAY_HOVER: usize = 7;
 pub const TIMER_CLOCK: usize = 8;
 pub const TIMER_TRAY_REPOSITION: usize = 9;
 
-// Custom messages
+// 사용자 정의 메시지
 pub const WM_APP: u32 = 0x8000;
 pub const WM_APP_USAGE_UPDATED: u32 = WM_APP + 1;
 pub const WM_APP_TRAY: u32 = WM_APP + 3;
@@ -33,7 +33,7 @@ pub const WM_APP_TASKBAR_COLLISION: u32 = WM_APP + 10;
 pub const WM_APP_UPDATE_ACTION: u32 = WM_APP + 13;
 pub const WM_APP_CHECK_FOR_UPDATES: u32 = WM_APP + 14;
 
-/// Convert a Rust string to a null-terminated wide string
+/// Rust 문자열을 null로 끝나는 와이드 문자열(UTF-16)로 변환합니다.
 pub fn wide_str(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }

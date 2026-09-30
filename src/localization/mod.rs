@@ -6,8 +6,8 @@
 //! - 언어는 한국어가 유일합니다. `from_code`가 `ko`가 아니면 `None`을 돌려
 //!   한국어로 떨어지게 했습니다 (옛 설정 파일 호환용).
 
-// Keep the complete translation catalogue while the menu bar UI progressively
-// adopts the legacy widget strings.
+// 메뉴 바 UI가 레거시 위젯 문자열을 점진적으로 채택하는 동안
+// 완전한 번역 카탈로그를 유지합니다.
 
 #[cfg(windows)]
 use windows::core::PWSTR;
@@ -283,11 +283,11 @@ fn default_locale_name() -> Option<LanguageId> {
 mod tests {
     use super::*;
 
-    /// The shipped locale must actually translate these, not fall through to
-    /// the catalogue key — an untranslated string is how a gap reaches the UI.
-    /// Keys here are the ones the native menus and context menu still render.
-    /// Provider names are absent on purpose: they are proper nouns that
-    /// `ko.toml` keeps identical to the key.
+    /// 기본 제공되는 로캘은 키로 폴백되지 않고 실제로 이를 번역해야 합니다.
+    /// 번역되지 않은 문자열은 UI에 빈틈을 만듭니다.
+    /// 여기에 있는 키들은 네이티브 메뉴 및 컨텍스트 메뉴가 여전히 렌더링하는 키들입니다.
+    /// 제공자 이름은 의도적으로 제외되었습니다. 고유 명사이므로 `ko.toml`에서도
+    /// 키와 동일하게 유지됩니다.
     #[test]
     fn the_korean_locale_translates_every_key_the_app_still_renders() {
         let keys = [

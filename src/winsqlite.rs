@@ -1,8 +1,8 @@
-//! Minimal read-only wrapper around SQLite shipped with Windows 10 and 11.
+//! Windows 10 및 11에 기본 탑재된 SQLite를 위한 최소한의 읽기 전용 래퍼입니다.
 //!
-//! Keep this intentionally narrow: the monitor only needs to retrieve one text
-//! value from an application-owned database. Linking as a raw DLL import avoids
-//! bundling SQLite or depending on a Windows SDK import library at build time.
+//! 의도적으로 범위를 좁게 유지합니다: 모니터는 애플리케이션 소유 데이터베이스에서
+//! 단 하나의 텍스트 값만 조회하면 됩니다. 순수 DLL 임포트로 링크하여
+//! 빌드 시 SQLite를 번들링하거나 Windows SDK 임포트 라이브러리에 의존하는 것을 방지합니다.
 
 use std::ffi::{c_char, c_int, c_uchar, CStr, CString};
 use std::fmt;
@@ -159,8 +159,8 @@ impl Statement<'_> {
     fn bind_text(&mut self, index: c_int, value: &CStr) -> Result<(), Error> {
         let value_bytes = c_int::try_from(value.to_bytes().len())
             .map_err(|_| Error("SQLite parameter is too large".into()))?;
-        // SQLITE_STATIC is safe here because the caller keeps `value` alive
-        // until after sqlite3_step returns.
+        // 호출자가 sqlite3_step이 반환될 때까지 `value`의 수명을 유지하므로
+        // 여기서 SQLITE_STATIC은 안전합니다.
         let result =
             unsafe { sqlite3_bind_text(self.raw, index, value.as_ptr(), value_bytes, None) };
         if result == SQLITE_OK {
@@ -220,7 +220,7 @@ fn error_message(database: *mut Sqlite3, context: &str, result: c_int) -> Error 
     }
 }
 
-/// Query column zero from the first row of a read-only, one-parameter query.
+/// 읽기 전용 단일 매개변수 쿼리의 첫 번째 행에서 0번 열을 조회합니다.
 pub(crate) fn query_optional_text(
     path: &Path,
     sql: &str,

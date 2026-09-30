@@ -22,7 +22,7 @@ const THEME_TRAY_ICON_ID_BASE: u32 = 1_000;
 
 static REGISTERED_THEME_ICON_IDS: Mutex<Vec<u32>> = Mutex::new(Vec::new());
 
-/// Rasterized theme root to expose as a genuine notification-area icon.
+/// 실제 알림 영역 아이콘으로 노출할 래스터화된 테마 루트입니다.
 pub struct ThemedTrayIcon {
     pub surface_index: usize,
     pub tooltip: String,
@@ -31,15 +31,15 @@ pub struct ThemedTrayIcon {
     pub pixels: Vec<u32>,
 }
 
-/// Actions the tray message handler can request from the main window.
+/// 트레이 메시지 핸들러가 메인 윈도우에 요청할 수 있는 동작들입니다.
 pub enum TrayAction {
     None,
     ShowContextMenu,
 }
 
-/// Load the application icons embedded by build.rs from src/icons/icon.ico.
-/// Native windows and the system tray share this source so Windows can choose
-/// the exact large or small icon instead of scaling a single bitmap.
+/// build.rs에 의해 임베드된 애플리케이션 아이콘(src/icons/icon.ico)을 로드합니다.
+/// 네이티브 윈도우와 시스템 트레이가 이 소스를 공유하여, Windows가 단일 비트맵을
+/// 확대/축소하는 대신 정확한 크기의 대형/소형 아이콘을 선택할 수 있도록 합니다.
 pub fn load_app_icons() -> (HICON, HICON) {
     unsafe {
         let mut exe_buf = [0u16; 260];
@@ -111,9 +111,9 @@ pub fn cursor_over_themed_icon(hwnd: HWND, surface_index: usize) -> bool {
 fn create_themed_icon(icon: &ThemedTrayIcon) -> HICON {
     if icon.width == 0
         || icon.height == 0
-        // Explorer ultimately displays one square notification-area slot. A
-        // bounded source prevents an accidental theme expression from asking
-        // GDI and the shell to retain an enormous icon bitmap.
+        // 파일 탐색기는 궁극적으로 하나의 정사각형 알림 영역 슬롯을 표시합니다.
+        // 최대 크기를 제한하여 테마 표현식의 실수로 인해 GDI와 셸이 거대한
+        // 아이콘 비트맵을 유지하도록 요구하는 문제를 방지합니다.
         || icon.width > 512
         || icon.height > 512
         || icon.pixels.len() != icon.width as usize * icon.height as usize
@@ -128,7 +128,7 @@ fn create_themed_icon(icon: &ThemedTrayIcon) -> HICON {
             bmiHeader: BITMAPINFOHEADER {
                 biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
                 biWidth: icon.width as i32,
-                // Theme pixels are top-down, so use a top-down DIB as well.
+                // 테마 픽셀은 상단 우선(top-down)이므로 DIB 역시 상단 우선 방식을 사용합니다.
                 biHeight: -(icon.height as i32),
                 biPlanes: 1,
                 biBitCount: 32,
@@ -154,9 +154,9 @@ fn create_themed_icon(icon: &ThemedTrayIcon) -> HICON {
         }
         std::ptr::copy_nonoverlapping(icon.pixels.as_ptr(), bits.cast::<u32>(), icon.pixels.len());
 
-        // A zero monochrome mask lets the 32-bit colour bitmap's alpha channel
-        // define the transparent pixels and antialiased edges. Win32 requires
-        // the 1bpp scanline to be 16-bit WORD-aligned and filled with 0s.
+        // 0으로 채워진 단색(monochrome) 마스크는 32비트 컬러 비트맵의 알파 채널이
+        // 투명 픽셀 및 안티앨리어싱 가장자리를 정의하도록 합니다. Win32 요구사항에 따라
+        // 1bpp 스캔라인은 16비트 WORD 정렬되어야 하며 0으로 채워져야 합니다.
         let stride = ((icon.width + 15) / 16) * 2;
         let mask_bytes = vec![0u8; (stride * icon.height) as usize];
         let mask_bitmap = CreateBitmap(
@@ -208,7 +208,7 @@ fn remove_registered_theme_icons(hwnd: HWND) {
     }
 }
 
-/// Register or refresh the single persistent application tray icon.
+/// 단일 영속 애플리케이션 트레이 아이콘을 등록하거나 갱신합니다.
 pub fn sync(hwnd: HWND, tooltip: &str) {
     remove_registered_theme_icons(hwnd);
     let hicon = load_app_icon();
@@ -226,8 +226,8 @@ pub fn sync(hwnd: HWND, tooltip: &str) {
         nid.hIcon = hicon;
         copy_to_tip(tooltip, &mut nid.szTip);
 
-        // NIM_ADD succeeds on first registration. If the icon is already
-        // present, NIM_MODIFY refreshes its image, callback and tooltip.
+        // 최초 등록 시 NIM_ADD가 성공합니다. 아이콘이 이미 존재하는 경우
+        // NIM_MODIFY가 이미지, 콜백 및 툴팁을 갱신합니다.
         if !Shell_NotifyIconW(NIM_ADD, &nid).as_bool() {
             let _ = Shell_NotifyIconW(NIM_MODIFY, &nid);
         }
@@ -235,8 +235,8 @@ pub fn sync(hwnd: HWND, tooltip: &str) {
     }
 }
 
-/// Register theme roots as independent notification-area icons. The
-/// shell owns their order and overflow placement just like every other app icon.
+/// 테마 루트들을 독립적인 알림 영역 아이콘들로 등록합니다.
+/// 다른 일반 앱 아이콘들과 마찬가지로 셸이 표시 순서 및 오버플로 배치를 관리합니다.
 pub fn sync_themed(hwnd: HWND, icons: &[ThemedTrayIcon]) {
     remove_id(hwnd, APP_TRAY_ICON_ID);
     let mut refreshed_ids = Vec::with_capacity(icons.len());
@@ -276,7 +276,7 @@ pub fn sync_themed(hwnd: HWND, icons: &[ThemedTrayIcon]) {
     *registered = refreshed_ids;
 }
 
-/// Show a Windows balloon notification from the application tray icon.
+/// 애플리케이션 트레이 아이콘에서 Windows 말풍선 알림을 표시합니다.
 pub fn notify_balloon(hwnd: HWND, title: &str, message: &str) {
     let icon_id = REGISTERED_THEME_ICON_IDS
         .lock()
@@ -297,13 +297,13 @@ pub fn notify_balloon(hwnd: HWND, title: &str, message: &str) {
     }
 }
 
-/// Remove the application tray icon from the shell.
+/// 셸에서 애플리케이션 트레이 아이콘을 제거합니다.
 pub fn remove_all(hwnd: HWND) {
     remove_id(hwnd, APP_TRAY_ICON_ID);
     remove_registered_theme_icons(hwnd);
 }
 
-/// Interpret a tray callback message and return the action to take.
+/// 트레이 콜백 메시지를 해석하여 수행할 동작을 반환합니다.
 pub fn handle_message(lparam: LPARAM) -> TrayAction {
     let mouse_msg = lparam.0 as u32;
     match mouse_msg {

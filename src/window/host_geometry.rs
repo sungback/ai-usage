@@ -1,3 +1,8 @@
+//! 모니터·작업표시줄 지리 정보 — 처음 보시는 분을 위한 안내.
+//!
+//! - 시작할 때와 화면 배치가 바뀔 때 모니터·작업표시줄 자리를 미리 재 둡니다.
+//! - 값만 들고 있고 네이티브 핸들은 안 들고 있어 읽는 쪽은 Win32 호출이 없습니다.
+
 use super::*;
 
 #[derive(Clone, Copy)]
@@ -7,12 +12,12 @@ struct ThemeHostGeometry {
     scale: f64,
 }
 
-// Store values rather than native handles so readers need no Win32 calls.
-// Readers may hold STATE; writers must never acquire STATE while holding this lock.
+// 읽는 쪽에서 Win32를 호출할 필요가 없도록 네이티브 핸들 대신 값을 저장합니다.
+// 읽는 쪽은 STATE를 보유할 수 있으며, 쓰는 쪽은 이 락을 보유한 상태에서 STATE를 획득해서는 안 됩니다.
 static THEME_HOST_GEOMETRY: Mutex<Vec<ThemeHostGeometry>> = Mutex::new(Vec::new());
 static REFRESHING: AtomicBool = AtomicBool::new(false);
 
-/// Called at startup and on shell/display layout changes, with STATE unlocked.
+/// 시작할 때 및 셸/디스플레이 레이아웃이 변경될 때 STATE가 잠기지 않은 상태에서 호출됩니다.
 pub(super) fn refresh_theme_host_geometry() {
     refresh_with(|| {
         let displays = native_interop::find_monitors();
@@ -34,8 +39,8 @@ pub(super) fn refresh_theme_host_geometry() {
 }
 
 fn refresh_with(query: impl FnOnce() -> Vec<ThemeHostGeometry>) {
-    // Layout queries can dispatch another layout notification before returning.
-    // Reentrant readers keep using the last complete snapshot; never wait here.
+    // 레이아웃 쿼리는 반환하기 전에 다른 레이아웃 알림을 전달(디스패치)할 수 있습니다.
+    // 재진입한 읽는 쪽은 마지막으로 완료된 스냅샷을 계속 사용하며, 여기서 대기하지 않습니다.
     if REFRESHING.swap(true, Ordering::Acquire) {
         return;
     }
@@ -52,7 +57,7 @@ fn refresh_with(query: impl FnOnce() -> Vec<ThemeHostGeometry>) {
         .unwrap_or_else(|e| e.into_inner()) = geometry;
 }
 
-/// Safe under STATE: sizing, hit testing and menu evaluation use only cached values.
+/// STATE 잠금 상태에서도 안전합니다: 크기 조정, 히트 테스트 및 메뉴 평가는 캐시된 값만 사용합니다.
 pub(super) fn theme_runtime_for_surface(
     theme: &ThemeDocument,
     surface_index: usize,
@@ -106,12 +111,7 @@ fn runtime_with_geometry(
 
 #[cfg(test)]
 mod tests {
-//! 모니터·작업표시줄 지리 정보 — 처음 보시는 분을 위한 안내.
-//!
-//! - 시작할 때와 화면 배치가 바뀔 때 모니터·작업표시줄 자리를 미리 재 둡니다.
-//! - 값만 들고 있고 네이티브 핸들은 안 들고 있어 읽는 쪽은 Win32 호출이 없습니다.
-
-use super::*;
+    use super::*;
 
     fn display() -> ThemeHostGeometry {
         ThemeHostGeometry {
@@ -199,7 +199,7 @@ use super::*;
         refresh_with(|| vec![display()]);
         let previous = theme_runtime_for_surface(&theme, 0, runtime);
         refresh_with(|| {
-            // Simulate a sent message delivered during the shell round-trip.
+            // 셸 왕복 통신 중에 전달된 전송 메시지를 시뮬레이션합니다.
             let _state = lock_state();
             assert_eq!(theme_runtime_for_surface(&theme, 0, runtime), previous);
             refresh_with(|| panic!("a reentrant layout message must not query the shell"));

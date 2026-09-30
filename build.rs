@@ -20,7 +20,7 @@ fn embed_windows_resources() {
 
     let version = env!("CARGO_PKG_VERSION");
 
-    // Embed the icon and richer PE version metadata into the executable.
+    // 실행 파일에 아이콘 및 자세한 PE 버전 메타데이터를 임베드합니다.
     let mut res = WindowsResource::new();
     let numeric_version = pack_version(version);
 

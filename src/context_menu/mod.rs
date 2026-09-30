@@ -78,9 +78,9 @@ mod tests {
     };
     use crate::theme_engine::DataContext;
 
-    /// v2.12.47 and earlier wrote `set_language` rows into the on-disk menu file.
-    /// A user upgrading straight from those versions still has that file, so the
-    /// document has to load even though the action can no longer be built.
+    /// v2.12.47 및 이전 버전은 디스크의 메뉴 파일에 `set_language` 항목을 작성했습니다.
+    /// 해당 버전에서 바로 업그레이드한 사용자는 여전히 해당 파일을 가지고 있으므로,
+    /// 해당 액션을 더 이상 빌드할 수 없더라도 문서는 로드될 수 있어야 합니다.
     #[test]
     fn removed_legacy_actions_are_rejected() {
         let legacy = r#"{

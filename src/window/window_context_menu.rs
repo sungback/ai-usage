@@ -1,3 +1,7 @@
+//! 창에서 뜨는 컨텍스트 메뉴 연결 — 처음 보시는 분을 위한 안내.
+//!
+//! - 메뉴 문서를 읽어 화면에 띄우고, 실패하면 기본(Classic) 메뉴로 살려 둡니다.
+
 use super::*;
 
 pub(super) fn show_context_menu_document(
@@ -349,11 +353,7 @@ pub(super) fn execute_context_menu_action(
 
 #[cfg(test)]
 mod tests {
-//! 창에서 뜨는 컨텍스트 메뉴 연결 — 처음 보시는 분을 위한 안내.
-//!
-//! - 메뉴 문서를 읽어 화면에 띄우고, 실패하면 기본(Classic) 메뉴로 살려 둡니다.
-
-use super::*;
+    use super::*;
     use windows::Win32::UI::WindowsAndMessaging::{GetMenuItemCount, GetMenuItemID, GetSubMenu};
 
     #[test]
@@ -382,7 +382,7 @@ use super::*;
         for item in &mut conditional {
             item.render = theme_engine::Expression("providers.codex.enabled".into());
         }
-        // This row stays hidden even when its parent becomes visible.
+        // 이 행은 부모가 표시되더라도 계속 숨겨진 상태를 유지합니다.
         if let ContextMenuItemKind::Submenu { items } = &mut conditional[3].kind {
             let mut hidden = ContextMenuItem::text("hidden", "Hidden child");
             hidden.render = theme_engine::Expression("0".into());

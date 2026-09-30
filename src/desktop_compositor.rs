@@ -28,9 +28,9 @@ use windows::Win32::Graphics::Dxgi::{
 use crate::theme_engine::RenderedTheme;
 
 thread_local! {
-    // Desktop surfaces are created, rendered, and destroyed on the window
-    // thread. Keeping their COM objects thread-local reflects that ownership
-    // and avoids claiming the interfaces are Send/Sync.
+    // 데스크톱 서피스는 윈도우 스레드에서 생성, 렌더링, 소멸됩니다.
+    // COM 객체를 스레드 로컬(thread-local)로 유지하여 해당 소유권을 반영하고,
+    // 인터페이스가 Send/Sync라고 선언하는 것을 방지합니다.
     static PRESENTERS: RefCell<HashMap<isize, DesktopPresenter>> = RefCell::new(HashMap::new());
 }
 

@@ -31,7 +31,7 @@ impl TestWindow {
         unsafe {
             let class = native_interop::wide_str("UsageMonitorLayeredSurfaceRegression");
             let instance = GetModuleHandleW(PCWSTR::null()).unwrap();
-            // Tests use private, hidden windows and never touch Explorer.
+            // 테스트는 비공개 숨김 윈도우를 사용하며 Explorer를 건드리지 않습니다.
             RegisterClassW(&WNDCLASSW {
                 lpfnWndProc: Some(observe_layered_style),
                 hInstance: instance.into(),
@@ -69,8 +69,8 @@ impl TestWindow {
             },
             false,
         );
-        // UpdateLayeredWindow applies the bitmap size. Changing it on each
-        // call also verifies that presentation succeeded after reparenting.
+        // UpdateLayeredWindow은 비트맵 크기를 적용합니다. 호출할 때마다 크기를 변경하여
+        // 부모 재지정(reparenting) 후에도 프레젠테이션이 성공했는지 함께 검증합니다.
         let rect = native_interop::get_window_rect_safe(self.0).unwrap();
         assert_eq!(rect.right - rect.left, width as i32);
         assert_eq!(rect.bottom - rect.top, 2);

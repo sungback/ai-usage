@@ -2,9 +2,9 @@
 
 mod accounts;
 mod app_settings;
-// Windows-only: the native Windows tray/widget menu is its sole non-test consumer
-// (macOS builds its own NSMenu via `tray.set_menu()`). Compiled under `test` too so
-// the model/validation logic keeps being exercised on macOS CI.
+// Windows 전용: 네이티브 Windows 트레이/위젯 메뉴가 테스트 외의 유일한 소비자입니다
+// (macOS는 `tray.set_menu()`를 통해 자체 NSMenu를 구성합니다). 모델/유효성 검사 로직이
+// macOS CI에서도 계속 실행될 수 있도록 `test` 환경에서도 컴파일됩니다.
 #[cfg(any(windows, test))]
 mod context_menu;
 #[cfg(windows)]

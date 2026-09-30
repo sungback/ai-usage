@@ -1,4 +1,4 @@
-//! Platform abstraction layer for Windows and macOS.
+//! Windows 및 macOS를 위한 플랫폼 추상화 계층입니다.
 
 pub mod ring_badge;
 
