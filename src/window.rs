@@ -49,13 +49,13 @@ use crate::theme_engine::{
 use crate::tray_icon;
 use crate::updater::{self, ReleaseDescriptor, UpdateCheckResult};
 
-/// Copyable HWND value used by the watchdog after the UI thread publishes it.
+/// UI 스레드가 값을 발행한 후 감시자(watchdog)가 사용하는 복사 가능한 HWND 값입니다.
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct SendHwnd(isize);
 
-// SAFETY: this wrapper never transfers ownership of a window. Cross-thread users
-// only pass the value back to Win32 APIs that explicitly accept handles created
-// by another thread (for example IsWindow and PostMessageW).
+// SAFETY: 이 래퍼는 절대 윈도우의 소유권을 이전하지 않습니다. 크로스 스레드 사용자는
+// 이 값을 IsWindow나 PostMessageW 같이 다른 스레드에서 생성된 핸들을 
+// 명시적으로 허용하는 Win32 API로 다시 전달할 때만 사용합니다.
 unsafe impl Send for SendHwnd {}
 
 impl SendHwnd {
@@ -67,12 +67,12 @@ impl SendHwnd {
     }
 }
 
-/// Copyable event-hook value whose lifetime remains owned by the UI controller.
+/// UI 컨트롤러가 수명을 소유하는 복사 가능한 이벤트 후크(event-hook) 값입니다.
 #[derive(Clone, Copy)]
 struct SendWinEventHook(isize);
 
-// SAFETY: the hook is only stored or passed to UnhookWinEvent. Callback work is
-// marshalled through Win32; Rust data is never dereferenced through this value.
+// SAFETY: 이 후크는 저장되거나 UnhookWinEvent로 전달되기만 합니다. 콜백 작업은
+// Win32를 통해 마샬링되며, Rust 데이터는 절대 이 값을 통해 역참조되지 않습니다.
 unsafe impl Send for SendWinEventHook {}
 
 impl SendWinEventHook {
@@ -85,7 +85,7 @@ impl SendWinEventHook {
     }
 }
 
-/// Shared application state
+/// 공유되는 애플리케이션 상태입니다.
 struct AppState {
     hwnd: SendHwnd,
     taskbar_hwnd: Option<SendHwnd>,
@@ -179,7 +179,7 @@ fn perform_update_action(hwnd: HWND) {
     }
 }
 
-// Menu item IDs for update frequency
+// 업데이트 주기(frequency)를 위한 메뉴 항목 ID들입니다.
 const IDM_FREQ_1MIN: u16 = 10;
 const IDM_FREQ_5MIN: u16 = 11;
 const IDM_FREQ_15MIN: u16 = 12;
@@ -212,20 +212,20 @@ fn open_web_url(hwnd: HWND, url: &str) {
     }
 }
 
-/// How often the watchdog thread polls for an explorer.exe restart (which
-/// recreates the taskbar and wipes our tray-icon registration).
+/// 감시자(watchdog) 스레드가 explorer.exe의 재시작(작업 표시줄을 재생성하고
+/// 우리의 트레이 아이콘 등록을 지워버림)을 확인하기 위해 폴링하는 주기입니다.
 const TASKBAR_WATCH_INTERVAL_SECS: u64 = 2;
 
 static SUPPRESS_TRAY_REPOSITION_UNTIL: Mutex<Option<Instant>> = Mutex::new(None);
 
-/// Current system DPI (96 = 100% scaling, 144 = 150%, 192 = 200%, etc.)
+/// 현재 시스템의 DPI입니다. (96 = 100% 스케일, 144 = 150%, 192 = 200% 등)
 static CURRENT_DPI: AtomicU32 = AtomicU32::new(96);
 static POLL_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 static POLL_PENDING: AtomicBool = AtomicBool::new(false);
 
-/// Re-query the monitor DPI for our window and update the cached value.
-/// Uses GetDpiForWindow which returns the live DPI (unlike GetDpiForSystem
-/// which is cached at process startup and never changes).
+/// 우리 윈도우가 속한 모니터의 DPI를 다시 쿼리하고 캐시된 값을 업데이트합니다.
+/// GetDpiForWindow를 사용하여 실시간 DPI를 반환받습니다 (프로세스 시작 시 캐시되어
+/// 절대 변하지 않는 GetDpiForSystem과는 다릅니다).
 fn refresh_dpi() {
     let hwnd = {
         let state = lock_state();
@@ -319,29 +319,27 @@ fn scaled_theme_dimension(logical: u32, scale: f64) -> i32 {
     (logical as f64 * scale).round().clamp(1.0, 8192.0) as i32
 }
 
-/// Spacing below which two relaunches are treated as a storm (e.g. explorer.exe
-/// crash-looping); when detected we back off instead of spawning in a tight loop.
+/// 두 번의 재시작(relaunch) 간격이 이 값보다 짧으면 재시작 폭주(storm)로 간주합니다
+/// (예: explorer.exe가 크래시 루프에 빠진 경우). 폭주가 감지되면 루프를 멈추고 백오프(대기)합니다.
 const RELAUNCH_THROTTLE_SECS: u64 = 10;
 const RELAUNCH_BACKOFF_SECS: u64 = 30;
-/// Environment flag set on a relaunched child so it waits for the previous
-/// instance's single-instance mutex instead of exiting immediately.
+/// 재시작된 자식 프로세스에 설정되는 환경 변수 플래그입니다. 즉시 종료되지 않고
+/// 이전 인스턴스의 단일 인스턴스(single-instance) 뮤텍스를 기다리도록 합니다.
 const ENV_RELAUNCH: &str = "AI_USAGE_RELAUNCH";
-/// Unix timestamp (seconds) of the relaunch that spawned this process, passed to
-/// the child so it can detect a relaunch storm.
+/// 이 프로세스를 생성한 재시작 이벤트의 Unix 타임스탬프(초 단위)입니다.
+/// 자식 프로세스가 재시작 폭주를 감지할 수 있도록 전달됩니다.
 const ENV_LAST_RELAUNCH_UNIX: &str = "AI_USAGE_LAST_RELAUNCH_UNIX";
 
-/// Relaunch the widget as a fresh process after explorer.exe has restarted.
+/// explorer.exe가 재시작된 후 위젯을 완전히 새로운 프로세스로 재시작합니다.
 ///
-/// When the shell restarts it destroys our embedded child window outright (the
-/// window is gone, not merely orphaned - `IsWindow` returns false) and leaves
-/// the UI thread parked in `GetMessage` with no window to recreate in place.
-/// Spawning a clean new process - which re-embeds into the freshly created
-/// taskbar - and exiting this one is the robust recovery. The child is flagged
-/// via `ENV_RELAUNCH` so it waits for this instance's single-instance mutex to
-/// be released before taking over (see the guard in `run`).
+/// 셸이 재시작되면 임베드된 자식 윈도우가 완전히 파괴되며 (단순히 고아가 되는 것이 아니라 `IsWindow`가 false를 반환함),
+/// UI 스레드는 다시 생성할 윈도우 없이 `GetMessage`에 멈춰있게 됩니다.
+/// 따라서 완전히 새로운 프로세스를 생성하여 새로 만들어진 작업 표시줄에 다시 임베드하고,
+/// 현재 프로세스는 종료하는 것이 가장 확실한 복구 방법입니다.
+/// 자식 프로세스는 `ENV_RELAUNCH` 플래그를 통해 현재 인스턴스의 단일 인스턴스 뮤텍스가 해제될 때까지 대기한 후 제어권을 넘겨받습니다 (`run` 함수의 가드 부분 참고).
 fn relaunch_self() {
-    // Back off if we are relaunching very soon after the relaunch that spawned
-    // us: that signals the shell is crash-looping, not a one-off restart.
+    // 현재 우리를 생성한 재시작 이벤트 직후에 다시 재시작하려고 한다면 백오프(대기)합니다:
+    // 이는 단순한 일회성 재시작이 아니라 셸이 크래시 루프에 빠졌음을 의미합니다.
     let now = now_unix_secs();
     let last = std::env::var(ENV_LAST_RELAUNCH_UNIX)
         .ok()
@@ -373,12 +371,11 @@ fn relaunch_self() {
     }
 }
 
-/// Detect explorer.exe restarts and recover from them.
+/// explorer.exe의 재시작을 감지하고 복구합니다.
 ///
-/// Explorer owns both taskbar and desktop surface hosts. When it restarts, any
-/// child widget windows are destroyed; if the primary window was hosted there,
-/// the UI message loop is lost as well. A dedicated thread checks all native
-/// surface handles and relaunches after the shell has returned.
+/// 파일 탐색기(Explorer)는 작업 표시줄과 바탕 화면 표면(surface) 호스트를 모두 소유합니다.
+/// 탐색기가 재시작되면 모든 자식 위젯 윈도우가 파괴되며, 기본 창이 여기에 호스팅되어 있었다면 UI 메시지 루프도 함께 손실됩니다.
+/// 이를 대비해 전용 스레드가 모든 네이티브 표면 핸들을 검사하며, 셸이 돌아온 후 앱을 재시작합니다.
 fn spawn_taskbar_watchdog() {
     std::thread::spawn(move || loop {
         std::thread::sleep(Duration::from_secs(TASKBAR_WATCH_INTERVAL_SECS));
@@ -411,9 +408,9 @@ fn spawn_taskbar_watchdog() {
                     if !IsWindow(Some(hwnd)).as_bool() {
                         return true;
                     }
-                    // When hosted inside a shell window (like Shell_TrayWnd or Progman),
-                    // Windows does not always destroy cross-process child windows when Explorer restarts.
-                    // If this window has a parent that is now destroyed, flag it as invalid.
+                    // 셸 윈도우(예: Shell_TrayWnd나 Progman) 내부에 호스팅될 때, 
+                    // 탐색기가 재시작되어도 Windows가 항상 크로스 프로세스 자식 윈도우를 파괴하는 것은 아닙니다.
+                    // 만약 이 윈도우의 부모가 파괴되었다면 이 윈도우도 무효(invalid)로 표시합니다.
                     match GetParent(hwnd).ok() {
                         Some(p) if !p.is_invalid() => !IsWindow(Some(p)).as_bool(),
                         _ => false,
@@ -518,7 +515,7 @@ fn spawn_taskbar_watchdog() {
 
 static STATE: Mutex<Option<AppState>> = Mutex::new(None);
 
-/// Lock STATE safely, recovering from poisoned mutex
+/// 오염된(poisoned) 뮤텍스를 복구하며 STATE를 안전하게 잠급니다.
 fn lock_state() -> MutexGuard<'static, Option<AppState>> {
     STATE.lock().unwrap_or_else(|e| e.into_inner())
 }
@@ -550,9 +547,8 @@ fn theme_runtime_from_state(state: &AppState) -> ThemeRuntime {
         .with_floating_card_opacity(opacity)
 }
 
-/// A transient outage can keep presenting the last real reading while its
-/// retry runs. Authentication failures and failures without cached data still
-/// need the explicit error state.
+/// 일시적인 에러(outage) 발생 시, 재시도하는 동안 이전의 실제 데이터가 계속 표시되도록 유지합니다.
+/// 인증 실패나 캐시된 데이터가 없는 상태에서의 실패는 여전히 명시적인 에러 상태를 표시해야 합니다.
 fn poll_display_state(
     last_poll_ok: bool,
     retry_count: u32,
@@ -642,8 +638,8 @@ fn apply_floating_position(
     positioning::override_primary_placement(theme, placement);
 }
 
-/// Resolve the actual rectangle that will be restored, including authored
-/// placement or a saved drag offset. The watchdog must test this same target.
+/// 테마에 작성된 배치(placement)나 저장된 드래그 오프셋을 포함하여,
+/// 실제로 복원될 대상 사각형 영역(rectangle)을 계산합니다. 감시자(watchdog)도 이 대상을 검사해야 합니다.
 fn restored_dock_rect(state: &AppState, taskbar: HWND, taskbar_rect: RECT) -> Option<RECT> {
     let theme = theme_with_placement(state, false)?;
     let surface = theme.surfaces.first()?;
@@ -753,8 +749,8 @@ fn save_state_settings() {
             .map(|path| path.to_string_lossy().to_string());
         persisted.placement_override = s.placement_override.clone();
         persisted.floating_card_opacity = s.floating_card_opacity;
-        // The monitor owns its dimensions, so leave the freshly
-        // loaded values unchanged when monitor actions persist settings.
+        // 모니터는 자신의 치수(dimensions)를 소유하므로, 모니터 액션이 설정을
+        // 유지(persist)할 때 새로 로드된 값들을 변경하지 않고 그대로 둡니다.
         let _ = save_settings(&persisted);
     }
 }
@@ -857,7 +853,7 @@ fn sync_tray_icon(hwnd: HWND) {
         })
     };
 
-    // If custom theme is used and it's NOT the builtin classic theme, respect custom theme's tray surfaces
+    // 커스텀 테마를 사용 중이고 내장된(builtin) 클래식 테마가 아니라면, 커스텀 테마의 트레이 표면 설정을 존중합니다.
     if let Some((theme, data, runtime)) = themed.as_ref() {
         if !theme.is_builtin_classic() {
             let has_tray_surfaces = theme.surfaces.iter().any(|surface| {
@@ -930,7 +926,7 @@ fn sync_tray_icon(hwnd: HWND) {
         }
     }
 
-    // Default / Classic behavior: Render modern concentric ring badge for active providers
+    // 기본(Default) / 클래식(Classic) 동작: 활성화된 공급자들을 위해 모던한 동심원 링 형태의 배지를 렌더링합니다.
     let (data, language) = {
         let state = lock_state();
         let data = state.as_ref().and_then(|s| s.data.clone());
@@ -1288,7 +1284,7 @@ fn begin_update_apply(hwnd: HWND, release: ReleaseDescriptor) {
 const STARTUP_REGISTRY_PATH: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 const STARTUP_REGISTRY_KEY: &str = "AIUsage";
 
-/// Returns true only if the startup registry value points to this executable.
+/// 시작프로그램 레지스트리 값이 현재 실행 파일(executable)을 가리킬 때만 true를 반환합니다.
 pub(crate) fn is_startup_enabled() -> bool {
     unsafe {
         let path = native_interop::wide_str(STARTUP_REGISTRY_PATH);
@@ -1306,7 +1302,7 @@ pub(crate) fn is_startup_enabled() -> bool {
             return false;
         }
 
-        // Query the size of the value
+        // 값의 크기를 쿼리(요청)합니다.
         let mut data_size: u32 = 0;
         let result = RegQueryValueExW(
             hkey,
@@ -1321,7 +1317,7 @@ pub(crate) fn is_startup_enabled() -> bool {
             return false;
         }
 
-        // Read the value
+        // 값을 읽어옵니다.
         let mut buf = vec![0u8; data_size as usize];
         let result = RegQueryValueExW(
             hkey,
@@ -1336,14 +1332,14 @@ pub(crate) fn is_startup_enabled() -> bool {
             return false;
         }
 
-        // Convert the registry value (UTF-16) to a string
+        // 레지스트리 값(UTF-16)을 문자열로 변환합니다.
         let wide_slice =
             std::slice::from_raw_parts(buf.as_ptr() as *const u16, data_size as usize / 2);
         let reg_value = String::from_utf16_lossy(wide_slice)
             .trim_end_matches('\0')
             .to_string();
 
-        // Get the current executable path
+        // 현재 실행 파일(executable)의 경로를 가져옵니다.
         let mut exe_buf = [0u16; 260];
         let len = GetModuleFileNameW(None, &mut exe_buf) as usize;
         if len == 0 {
@@ -1351,7 +1347,7 @@ pub(crate) fn is_startup_enabled() -> bool {
         }
         let current_exe = String::from_utf16_lossy(&exe_buf[..len]);
 
-        // Case-insensitive comparison (Windows paths are case-insensitive)
+        // 대소문자를 구분하지 않고 비교합니다 (Windows 경로는 대소문자를 구분하지 않음).
         reg_value.eq_ignore_ascii_case(&current_exe)
     }
 }
@@ -1378,7 +1374,7 @@ pub(crate) fn set_startup_enabled(enable: bool) {
             let mut exe_buf = [0u16; 260];
             let len = GetModuleFileNameW(None, &mut exe_buf) as usize;
             if len > 0 {
-                // Write the wide string including null terminator
+                // 널 종단 문자(null terminator)를 포함하여 와이드 문자열을 씁니다.
                 let byte_len = ((len + 1) * 2) as u32;
                 let _ = RegSetValueExW(
                     hkey,
@@ -1771,8 +1767,8 @@ fn parse_run_args(args: &[String]) -> RunOptions {
     }
 }
 
-/// Single-instance guard: acquires the global mutex, waiting briefly when a
-/// relaunch races the previous instance. Returns None to exit silently.
+/// 단일 인스턴스(Single-instance) 가드: 전역 뮤텍스를 획득하며, 재시작 시 
+/// 이전 인스턴스와 경쟁 상태가 발생하면 잠시 대기합니다. 조용히 종료하려면 None을 반환합니다.
 fn acquire_single_instance_mutex(allow_multiple: bool) -> Option<HANDLE> {
     let is_relaunch = std::env::var(ENV_RELAUNCH).is_ok();
     let mutex_name = native_interop::wide_str(&if allow_multiple {
@@ -1836,7 +1832,7 @@ fn register_app_window_class() -> WindowClassResources {
     }
 }
 
-/// Settings, theme, and language resolved before the first window exists.
+/// 첫 번째 윈도우가 생성되기 전에 확인(resolve)된 설정, 테마 및 언어 정보입니다.
 struct StartupConfig {
     settings: SettingsFile,
     active_theme_path: Option<PathBuf>,
@@ -1862,8 +1858,8 @@ fn resolve_startup_config() -> StartupConfig {
             .as_ref()
             .is_some_and(|theme| !theme.is_builtin_classic())
         {
-            // A user-selected writable theme already owns its presentation.
-            // Consume the obsolete settings without replacing that theme.
+            // 사용자가 선택한 쓰기 가능한 테마는 이미 자체적인 표현 방식(presentation)을 가지고 있습니다.
+            // 해당 테마를 덮어쓰지 않고 더 이상 쓰이지 않는(obsolete) 설정값들을 소비합니다.
             settings.consume_legacy_placement();
             settings.consume_legacy_widget_visibility();
             save_settings_or_log(&settings, "unable to consume legacy settings");
