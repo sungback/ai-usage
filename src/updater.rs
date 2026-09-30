@@ -39,8 +39,8 @@ const DOWNLOAD_EXE_NAME: &str = "update-download.exe";
 #[cfg(not(windows))]
 const DOWNLOAD_EXE_NAME: &str = "update-download";
 
-/// How often background update checks run. Windows arms `TIMER_UPDATE_CHECK`
-/// with it; macOS sleeps it between checks.
+/// 백그라운드 업데이트 확인 주기입니다. Windows는 `TIMER_UPDATE_CHECK`에
+/// 이 값을 설정하며, macOS는 확인 주기 사이에 이 시간만큼 대기합니다.
 pub const AUTO_UPDATE_CHECK_INTERVAL_SECS: u64 = 24 * 60 * 60;
 
 #[cfg(windows)]
@@ -64,9 +64,9 @@ impl CommandExtHelper for Command {
 pub struct ReleaseDescriptor {
     pub latest_version: String,
     asset_url: String,
-    /// The sibling `<asset>.sha256` release asset. Both release workflows
-    /// publish one, so its absence means the release is malformed and the
-    /// download is refused rather than installed unverified.
+    /// 형제 릴리스 자산인 `<asset>.sha256`입니다. 두 릴리스 워크플로 모두
+    /// 이를 게시하므로, 이것이 없으면 릴리스가 비정상적인 것으로 간주되어
+    /// 검증되지 않은 상태로 설치하는 대신 다운로드를 거부합니다.
     checksum_url: Option<String>,
 }
 
@@ -179,19 +179,19 @@ pub fn begin_self_update(release: &ReleaseDescriptor) -> Result<(), String> {
     Ok(())
 }
 
-/// Whether a zip entry looks like the executable to install: `*.exe` on
-/// Windows, a file named `ai-usage` elsewhere (e.g. the
-/// `Contents/MacOS/ai-usage` inside the macOS app bundle; suffixed renames
-/// like `ai-usage-aarch64` also match). Anything else in the archive —
-/// READMEs, checksum sidecars, disk images — is never installable.
+/// zip 항목이 설치할 실행 파일인지 여부를 판별합니다. Windows에서는 `*.exe`,
+/// 그 외 환경에서는 `ai-usage`라는 이름의 파일(예: macOS 앱 번들 내부의
+/// `Contents/MacOS/ai-usage`, `ai-usage-aarch64`와 같은 접미사 이름도 일치)입니다.
+/// 아카이브 내의 다른 모든 항목(README, 체크섬 부속 파일, 디스크 이미지 등)은
+/// 설치 대상이 아닙니다.
 fn is_installable_zip_entry(name: &str) -> bool {
     if name.ends_with('/') {
         return false;
     }
     #[cfg(windows)]
     {
-        // Keep the historical case-sensitive match: release assets are
-        // lowercase `ai-usage.exe` and nothing else ends in `.exe`.
+        // 기존의 대소문자 구분 일치를 유지합니다. 릴리스 자산은
+        // 소문자 `ai-usage.exe`이며 `.exe`로 끝나는 다른 파일은 없습니다.
         name.ends_with(".exe")
     }
     #[cfg(not(windows))]
@@ -205,9 +205,8 @@ fn is_installable_zip_entry(name: &str) -> bool {
     }
 }
 
-/// Walk up from the running executable to the enclosing `.app` bundle, if any.
-/// A dev run from `target/` has no bundle ancestor and falls back to the
-/// helper flow below.
+/// 실행 중인 실행 파일에서 상위로 탐색하여 포함하는 `.app` 번들을 찾습니다(있는 경우).
+/// `target/`에서 개발 실행하는 경우 상위 번들이 없으므로 아래의 헬퍼 플로우로 대체됩니다.
 #[cfg(target_os = "macos")]
 fn enclosing_app_bundle(exe: &Path) -> Option<PathBuf> {
     exe.ancestors()
@@ -219,10 +218,10 @@ fn enclosing_app_bundle(exe: &Path) -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
-/// macOS in-place update without a helper process: replacing the inner binary
-/// of a running bundle is allowed, but it invalidates the bundle seal, so the
-/// bundle is re-signed ad-hoc before relaunching with `open`. No helper means
-/// Gatekeeper never sees a stray ad-hoc executable to reject.
+/// 헬퍼 프로세스 없는 macOS 인플레이스 업데이트: 실행 중인 번들의 내부 바이너리를
+/// 교체하는 것은 허용되지만 번들 서명이 무효화되므로, `open`으로 다시 실행하기 전에
+/// 번들을 임시(ad-hoc) 서명합니다. 헬퍼가 없으므로 Gatekeeper가 거부할 수 있는
+/// 의심스러운 임시 실행 파일이 노출되지 않습니다.
 #[cfg(target_os = "macos")]
 fn apply_macos_bundle_update(
     release: &ReleaseDescriptor,
@@ -460,9 +459,9 @@ fn fetch_latest_release() -> Result<Option<ReleaseDescriptor>, String> {
     }))
 }
 
-/// Release assets that can actually be installed. Checksum sidecars share the
-/// binary's name stem (`ai-usage-macos-arm64.zip.sha256`), so name matching
-/// must exclude them or an update would download a digest as its payload.
+/// 실제로 설치 가능한 릴리스 자산입니다. 체크섬 부속 파일은 바이너리와 파일명
+/// 접두사(`ai-usage-macos-arm64.zip.sha256`)를 공유하므로, 이름 매칭 시 이를 제외해야
+/// 업데이트 페이로드로 다이제스트를 다운로드하는 일이 방지됩니다.
 #[cfg(target_os = "macos")]
 fn is_installable_release_asset(lower_name: &str) -> bool {
     !lower_name.ends_with(".sha256")
@@ -486,8 +485,8 @@ fn download_release_asset(
     partial_path: &Path,
     final_path: &Path,
 ) -> Result<(), String> {
-    // Refuse before spending any bandwidth: an unverifiable payload is never
-    // going to be installed, so downloading it first only risks filling the disk.
+    // 대역폭을 소모하기 전에 거부합니다. 검증할 수 없는 페이로드는 결코
+    // 설치되지 않으므로, 먼저 다운로드하면 디스크만 낭비할 위험이 있습니다.
     let Some(checksum_url) = checksum_url else {
         return Err(
             "This release does not publish a checksum, so the download cannot be verified. \
@@ -521,11 +520,10 @@ fn download_release_asset(
     Ok(())
 }
 
-/// Guards against a truncated or corrupted download, not a compromised
-/// release: the checksum comes from the same GitHub release as the binary
-/// itself, so this cannot catch a release that was tampered with at the
-/// source. A release that ships no checksum is refused by the caller rather
-/// than installed unverified.
+/// 불완전하거나 손상된 다운로드를 방지하기 위한 것이며, 침해된 릴리스를 방지하는
+/// 것은 아닙니다. 체크섬은 바이너리 자체와 동일한 GitHub 릴리스에서 가져오므로,
+/// 원본에서 변조된 릴리스를 감지할 수는 없습니다. 체크섬이 없는 릴리스는
+/// 검증 없이 설치하지 않고 호출자 측에서 거부합니다.
 fn verify_checksum(agent: &ureq::Agent, checksum_url: &str, downloaded: &Path) -> Result<(), String> {
     let mut response = agent
         .get(checksum_url)
@@ -554,9 +552,9 @@ fn verify_checksum(agent: &ureq::Agent, checksum_url: &str, downloaded: &Path) -
     Ok(())
 }
 
-/// A `.sha256` asset is either a bare hex digest or the standard
-/// `sha256sum`/`shasum` line format (`"<hex>  <filename>"`); either way, the
-/// digest is the first whitespace-separated token.
+/// `.sha256` 자산은 순수 16진수 다이제스트이거나 표준 `sha256sum`/`shasum` 라인
+/// 형식(`"<hex>  <filename>"`)입니다. 어느 쪽이든 다이제스트는 공백으로 구분된
+/// 첫 번째 토큰입니다.
 fn parse_sha256_digest(body: &str) -> Option<String> {
     let token = body.split_whitespace().next()?;
     (token.len() == 64 && token.bytes().all(|b| b.is_ascii_hexdigit()))
@@ -818,8 +816,8 @@ mod tests {
         assert_eq!(parse_sha256_digest("not-hex"), None);
         assert_eq!(parse_sha256_digest(&"a".repeat(63)), None);
         assert_eq!(parse_sha256_digest(&"a".repeat(65)), None);
-        // A stray HTML error page (e.g. a 404 that still returned status 200
-        // from a CDN) must not be mistaken for a digest.
+        // 잘못된 HTML 오류 페이지(예: CDN에서 상태 코드 200으로 반환된 404)를
+        // 다이제스트로 오인해서는 안 됩니다.
         assert_eq!(parse_sha256_digest("<html>Not Found</html>"), None);
     }
 
@@ -897,8 +895,8 @@ mod tests {
         let partial = root.join("download.part");
         let final_path = root.join("download.bin");
 
-        // Port 1 is never listening, so reaching the network would surface a
-        // connection error instead of the refusal below.
+        // 1번 포트는 수신 대기하지 않으므로, 네트워크에 연결을 시도하면
+        // 아래의 거부 대신 연결 오류가 발생합니다.
         let error = download_release_asset("http://127.0.0.1:1/never-fetched", None, &partial, &final_path)
             .expect_err("an unverifiable payload must never be installed");
 

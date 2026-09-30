@@ -3,7 +3,7 @@
 //! - 설정은 원자적으로 저장(임시 파일→교체)해 꺼지다 말아도 깨지지 않습니다.
 //! - 망가진 파일은 `settings.json.corrupt-*`로 대기시켜 두고 기본값으로 시작합니다.
 //!
-//! Shared, atomically persisted state used by the monitor process.
+//! 모니터 프로세스에서 사용하는 공유 및 원자적으로 영속화되는 상태입니다.
 
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -33,7 +33,7 @@ pub const POLL_1_HOUR_SECONDS: u32 = 3_600;
 pub const POLL_5_MIN: u32 = POLL_5_MIN_SECONDS * 1_000;
 #[cfg(any(windows, test))]
 pub const POLL_1_HOUR: u32 = POLL_1_HOUR_SECONDS * 1_000;
-// SetTimer clamps longer intervals to USER_TIMER_MAXIMUM (i32::MAX ms).
+// SetTimer는 더 긴 주기를 USER_TIMER_MAXIMUM(i32::MAX ms)으로 제한합니다.
 pub const MAX_POLL_MINUTES: u32 = i32::MAX as u32 / POLL_1_MIN;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -44,15 +44,15 @@ pub struct SettingsFile {
     pub tray_offset: i32,
     #[serde(default, skip_serializing)]
     pub taskbar_index: usize,
-    /// True only when the settings file still contains the pre-theme placement
-    /// fields. While this remains true, ordinary settings saves preserve those
-    /// fields so only the startup migration can consume them.
+    /// 설정 파일에 테마 도입 전의 배치 필드가 남아 있는 경우에만 참입니다.
+    /// 이것이 참인 동안에는 일반 설정 저장이 해당 필드들을 보존하여,
+    /// 오직 시작 시 마이그레이션만 이를 소모할 수 있도록 합니다.
     #[serde(skip)]
     pub legacy_placement_pending: bool,
     #[serde(default = "default_true", skip_serializing)]
     pub widget_visible: bool,
-    /// True only while the pre-theme `widget_visible` value still needs to be
-    /// transferred to the main root's Render expression.
+    /// 테마 도입 전의 `widget_visible` 값을 메인 루트의 Render 표현식으로
+    /// 이전해야 할 때만 참입니다.
     #[serde(skip)]
     pub legacy_visibility_pending: bool,
     #[serde(default = "default_poll_interval")]
@@ -73,8 +73,8 @@ pub struct SettingsFile {
     show_cursor: bool,
     #[serde(default = "default_true")]
     pub custom_theme_enabled: bool,
-    /// Show what is left of each allowance instead of what has been spent, so
-    /// the widget counts down towards a limit rather than up from zero.
+    /// 사용된 양 대신 각 허용량의 잔여량을 표시하여, 위젯이 0부터 증가하는 대신
+    /// 한도를 향해 카운트다운하도록 합니다.
     #[serde(default)]
     pub usage_countdown: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -87,21 +87,21 @@ pub struct SettingsFile {
     pub floating_card_opacity: Option<u8>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub placement_override: Option<PlacementOverride>,
-    /// Hex color for the outer ring (session/5H) in menu bar badge. e.g. "#4A90D9"
+    /// 메뉴 바 배지의 외측 링(세션/5H) 16진수 색상 코드 (예: "#4A90D9").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ring_outer_color: Option<String>,
-    /// Hex color for the inner ring (weekly) in menu bar badge. e.g. "#4ADE80"
+    /// 메뉴 바 배지의 내측 링(주간) 16진수 색상 코드 (예: "#4ADE80").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ring_inner_color: Option<String>,
-    /// Custom ordering of providers (by key, e.g. ["codex", "claude", "antigravity"])
+    /// 제공자 사용자 정의 순서 (키 기준, 예: ["codex", "claude", "antigravity"]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider_order: Option<Vec<String>>,
-    /// Show the inner (weekly/7D) ring in the menu bar badge.
-    /// If false, only the outer (session/5H) ring is shown with a larger center number.
+    /// 메뉴 바 배지에 내측 링(주간/7D)을 표시할지 여부입니다.
+    /// 거짓인 경우 외측 링(세션/5H)만 표시되고 중앙 숫자가 더 크게 표시됩니다.
     #[serde(default = "default_true")]
     pub show_inner_ring: bool,
-    /// When true, renders the modern concentric ring badge in the Windows taskbar widget
-    /// instead of the classic rectangular segment bar.
+    /// 참일 경우 클래식 직사각형 세그먼트 바 대신 Windows 작업 표시줄 위젯에
+    /// 현대적인 동심원 링 배지를 렌더링합니다.
     #[serde(default = "default_true")]
     pub taskbar_ring_badge: bool,
 }
@@ -174,8 +174,8 @@ impl SettingsFile {
         if let Some(opacity) = self.floating_card_opacity {
             self.floating_card_opacity = Some(opacity.min(100));
         }
-        // Keep accepting this
-        // legacy setting so older settings files migrate cleanly.
+        // 이전 설정 파일이 깔끔하게 마이그레이션되도록
+        // 이 레거시 설정을 계속 허용합니다.
         self.custom_theme_enabled = true;
         self.dashboard_width = valid_dashboard_dimension(self.dashboard_width);
         self.dashboard_height = valid_dashboard_dimension(self.dashboard_height);
@@ -246,7 +246,7 @@ impl SettingsFile {
         }
     }
 
-    /// Returns the full list of providers in their current display order.
+    /// 현재 표시 순서에 따른 전체 제공자 목록을 반환합니다.
     pub fn ordered_providers(&self) -> Vec<ProviderId> {
         let default_order = [
             ProviderId::Claude,
@@ -275,7 +275,7 @@ impl SettingsFile {
         }
     }
 
-    /// Returns the currently enabled providers in their display order.
+    /// 현재 활성화된 제공자들을 표시 순서대로 반환합니다.
     pub fn enabled_ordered_providers(&self) -> Vec<ProviderId> {
         self.ordered_providers()
             .into_iter()
@@ -283,13 +283,13 @@ impl SettingsFile {
             .collect()
     }
 
-    /// Move an enabled provider one step up (to the left / earlier in order).
+    /// 활성화된 제공자를 한 단계 위로(왼쪽/앞 순서로) 이동합니다.
     pub fn move_provider_up(&mut self, target: ProviderId) -> bool {
         let mut enabled = self.enabled_ordered_providers();
         if let Some(idx) = enabled.iter().position(|&id| id == target) {
             if idx > 0 {
                 enabled.swap(idx, idx - 1);
-                // Reconstruct full order preserving non-enabled providers
+                // 비활성 제공자를 보존하면서 전체 순서를 재구성합니다.
                 let mut full_order = enabled.clone();
                 for id in self.ordered_providers() {
                     if !full_order.contains(&id) {
@@ -308,7 +308,7 @@ impl SettingsFile {
         false
     }
 
-    /// Move an enabled provider one step down (to the right / later in order).
+    /// 활성화된 제공자를 한 단계 아래로(오른쪽/뒤 순서로) 이동합니다.
     pub fn move_provider_down(&mut self, target: ProviderId) -> bool {
         let mut enabled = self.enabled_ordered_providers();
         if let Some(idx) = enabled.iter().position(|&id| id == target) {
@@ -332,7 +332,7 @@ impl SettingsFile {
         false
     }
 
-    /// Reset provider order to default.
+    /// 제공자 순서를 기본값으로 초기화합니다.
     pub fn reset_provider_order(&mut self) {
         self.provider_order = None;
     }
@@ -378,9 +378,9 @@ pub fn load_settings() -> SettingsFile {
     settings
 }
 
-/// A settings file that cannot be parsed is moved aside rather than silently
-/// replaced: the next `save_settings` would otherwise overwrite it with defaults
-/// and destroy whatever the user had configured.
+/// 파싱할 수 없는 설정 파일은 조용히 교체하는 대신 격리(이동)합니다.
+/// 그렇지 않으면 다음 `save_settings`에서 기본값으로 덮어써서 사용자가 구성한
+/// 내용이 손실될 수 있습니다.
 fn quarantine_unreadable_settings(path: &Path) {
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -532,9 +532,9 @@ fn now_unix() -> u64 {
 mod tests {
     use super::*;
 
-    /// "Reset order" in the menus clears `provider_order`, so the default list
-    /// here is what the user actually gets back. It must follow the `ProviderId`
-    /// declaration order so the menus and `ProviderId::ALL` never disagree.
+    /// 메뉴의 "순서 초기화"는 `provider_order`를 비우므로, 여기서 정의한 기본 목록이
+    /// 사용자가 실제로 되돌려받는 순서가 됩니다. 메뉴와 `ProviderId::ALL`이 일치하도록
+    /// 반드시 `ProviderId` 선언 순서를 따라야 합니다.
     #[test]
     fn resetting_the_order_restores_the_provider_declaration_order() {
         let mut settings = SettingsFile::default();
@@ -763,17 +763,17 @@ mod tests {
         settings.set_provider_enabled(ProviderId::Claude, true);
         settings.set_provider_enabled(ProviderId::Antigravity, true);
 
-        // Default order: Claude, Codex, Antigravity, OpenCode, Cursor
+        // 기본 순서: Claude, Codex, Antigravity, OpenCode, Cursor
         assert_eq!(
             settings.enabled_ordered_providers(),
             vec![ProviderId::Claude, ProviderId::Codex, ProviderId::Antigravity]
         );
 
-        // Antigravity is last, so moving it down is a no-op
+        // Antigravity가 마지막이므로 아래로 이동해도 아무 변화가 없습니다.
         assert!(!settings.move_provider_down(ProviderId::Antigravity));
         assert!(!settings.move_provider_up(ProviderId::Claude));
 
-        // Move Claude down, then back up
+        // Claude를 아래로 이동한 후 다시 위로 이동합니다.
         assert!(settings.move_provider_down(ProviderId::Claude));
         assert_eq!(
             settings.enabled_ordered_providers(),
@@ -785,7 +785,7 @@ mod tests {
             vec![ProviderId::Claude, ProviderId::Codex, ProviderId::Antigravity]
         );
 
-        // Move it out of place, then reset back to the default order
+        // 순서를 바꾼 후 다시 기본 순서로 초기화합니다.
         assert!(settings.move_provider_down(ProviderId::Claude));
         settings.reset_provider_order();
         assert_eq!(settings.provider_order, None);

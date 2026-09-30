@@ -1,7 +1,7 @@
-//! Cross-platform concentric ring badge rendering engine for macOS and Windows.
+//! macOS 및 Windows용 크로스 플랫폼 동심원 링 배지 렌더링 엔진입니다.
 //!
-//! Provides ring rendering, brand color palettes, font loading,
-//! and optical number centering for system tray / menu bar items.
+//! 시스템 트레이 및 메뉴 바 아이템을 위한 링 렌더링, 브랜드 색상 팔레트,
+//! 폰트 로딩, 시각적 숫자 중앙 정렬을 제공합니다.
 
 use fontdue::{Font, FontSettings};
 use image::{Rgba, RgbaImage};
@@ -36,30 +36,30 @@ pub struct CenteredNumberParams<'a> {
     pub scale_factor: f32,
 }
 
-/// Brand theme color palettes for concentric ring pairs (outer 5H, inner 7D) per provider.
+/// 제공자별 동심원 링 쌍(바깥쪽 5H, 안쪽 7D)의 브랜드 테마 색상 팔레트입니다.
 pub fn provider_ring_palette(provider: ProviderId) -> (Rgba<u8>, Rgba<u8>) {
     match provider {
-        // Claude Code: Anthropic warm coral orange / golden amber
+        // Claude Code: Anthropic의 따뜻한 코랄 오렌지 / 골든 앰버
         ProviderId::Claude => (
             Rgba([249, 115, 22, 255]),  // #F97316 bright warm coral orange
             Rgba([251, 191, 36, 255]),  // #FBBF24 golden amber
         ),
-        // Codex: OpenAI signature emerald teal / bright lime mint
+        // Codex: OpenAI 시그니처 에메랄드 틸 / 밝은 라임 민트
         ProviderId::Codex => (
             Rgba([16, 163, 127, 255]),  // #10A37F OpenAI teal
             Rgba([74, 222, 128, 255]),  // #4ADE80 bright lime mint
         ),
-        // Google Antigravity: Gemini sky blue / electric violet
+        // Google Antigravity: Gemini 스카이 블루 / 일렉트릭 바이올렛
         ProviderId::Antigravity => (
             Rgba([0, 191, 255, 255]),   // #00BFFF deep sky blue
             Rgba([168, 85, 247, 255]),  // #A855F7 Gemini violet
         ),
-        // Cursor: futuristic electric cyan / neon indigo
+        // Cursor: 미래지향적 일렉트릭 시안 / 네온 인디고
         ProviderId::Cursor => (
             Rgba([6, 182, 212, 255]),   // #06B6D4 electric cyan
             Rgba([129, 140, 248, 255]), // #818CF8 neon indigo
         ),
-        // OpenCode: creative violet / soft rose pink
+        // OpenCode: 창의적인 바이올렛 / 소프트 로즈 핑크
         ProviderId::OpenCode => (
             Rgba([139, 92, 246, 255]),  // #8B5CF6 violet
             Rgba([244, 114, 182, 255]), // #F472B6 rose pink
@@ -67,24 +67,23 @@ pub fn provider_ring_palette(provider: ProviderId) -> (Rgba<u8>, Rgba<u8>) {
     }
 }
 
-/// Vibrant text color tailored for maximum contrast and readability inside the ring hole for each model.
+/// 각 모델의 링 내부 구멍에서 최대 대비와 가독성을 얻도록 맞춤 설계된 생생한 텍스트 색상입니다.
 pub fn provider_text_color(provider: ProviderId) -> Rgba<u8> {
     match provider {
-        // Claude Code: Anthropic warm, vibrant coral orange (#FF8A3D)
+        // Claude Code: Anthropic의 따뜻하고 선명한 코랄 오렌지 (#FF8A3D)
         ProviderId::Claude => Rgba([255, 138, 61, 255]),
-        // Codex: Signature OpenAI vibrant emerald mint (#34D399)
+        // Codex: OpenAI 시그니처 선명한 에메랄드 민트 (#34D399)
         ProviderId::Codex => Rgba([52, 211, 153, 255]),
-        // Google Antigravity: Vibrant Gemini sky blue for high contrast and readability on dark
-        // macOS menu bars and Windows taskbars (#38BDF8)
+        // Google Antigravity: 어두운 macOS 메뉴 바 및 Windows 작업 표시줄에서 높은 대비와 가독성을 제공하는 생생한 Gemini 스카이 블루 (#38BDF8)
         ProviderId::Antigravity => Rgba([56, 189, 248, 255]),
-        // Cursor: Futuristic bright electric cyan (#22D3EE)
+        // Cursor: 미래지향적 밝은 일렉트릭 시안 (#22D3EE)
         ProviderId::Cursor => Rgba([34, 211, 238, 255]),
-        // OpenCode: Creative luminous soft violet (#C084FC)
+        // OpenCode: 창의적인 발광 소프트 바이올렛 (#C084FC)
         ProviderId::OpenCode => Rgba([192, 132, 252, 255]),
     }
 }
 
-/// Parse a "#RRGGBB" hex color string into an Rgba.
+/// "#RRGGBB" 16진수 색상 문자열을 Rgba로 파싱합니다.
 #[allow(dead_code)]
 pub fn parse_hex_color(hex: &str) -> Option<Rgba<u8>> {
     let hex = hex.strip_prefix('#')?;
@@ -97,8 +96,8 @@ pub fn parse_hex_color(hex: &str) -> Option<Rgba<u8>> {
     Some(Rgba([r, g, b, 255]))
 }
 
-/// Load a system font suitable for drawing clean numbers at small sizes.
-/// Searches macOS, Windows, and Linux font paths.
+/// 작은 크기에서도 숫자를 깔끔하게 렌더링하기에 적합한 시스템 폰트를 로드합니다.
+/// macOS, Windows, Linux 폰트 경로를 순차적으로 탐색합니다.
 pub fn load_system_font() -> Option<Font> {
     let mut candidate_paths: Vec<String> = Vec::new();
 
@@ -119,7 +118,7 @@ pub fn load_system_font() -> Option<Font> {
         candidate_paths.push(format!("{}\\Fonts\\arial.ttf", windir));
     }
 
-    // Fallbacks for any OS or cross-testing
+    // 모든 OS 또는 크로스 테스트를 위한 대체(fallback) 폰트
     candidate_paths.push("/System/Library/Fonts/Supplemental/Arial Bold.ttf".into());
     candidate_paths.push("C:\\Windows\\Fonts\\segoeuib.ttf".into());
     candidate_paths.push("C:\\Windows\\Fonts\\arialbd.ttf".into());
@@ -136,7 +135,7 @@ pub fn load_system_font() -> Option<Font> {
     None
 }
 
-/// Alpha blend a single pixel onto an RgbaImage.
+/// 단일 픽셀을 RgbaImage 위에 알파 블렌딩합니다.
 pub fn blend_pixel(img: &mut RgbaImage, x: u32, y: u32, color: Rgba<u8>, glyph_alpha: u8) {
     if glyph_alpha == 0 || x >= img.width() || y >= img.height() {
         return;
@@ -162,7 +161,7 @@ pub fn blend_pixel(img: &mut RgbaImage, x: u32, y: u32, color: Rgba<u8>, glyph_a
     pixel[3] = (out_a * 255.0).round().clamp(0.0, 255.0) as u8;
 }
 
-/// Draw a number string centered precisely at (cx, cy) inside the ring hole.
+/// 링 구멍 내부의 (cx, cy) 위치에 정확하게 중앙 정렬하여 숫자 문자열을 그립니다.
 pub fn draw_centered_number(
     img: &mut RgbaImage,
     font: &Font,
@@ -246,8 +245,8 @@ pub fn draw_centered_number(
     }
 }
 
-/// Anti-aliasing factor for a distance within [r_inner, r_outer].
-/// Returns 0.0 outside, 1.0 inside, smooth at edges.
+/// [r_inner, r_outer] 범위 내의 거리에 대한 안티앨리어싱 계수입니다.
+/// 외부에서는 0.0, 내부에서는 1.0을 반환하며 가장자리는 부드럽게 보간됩니다.
 pub fn ring_antialias(dist: f64, r_inner: f64, r_outer: f64) -> f64 {
     if dist < r_inner - 0.5 || dist > r_outer + 0.5 {
         return 0.0;
@@ -257,15 +256,15 @@ pub fn ring_antialias(dist: f64, r_inner: f64, r_outer: f64) -> f64 {
     inner_edge.min(outer_edge)
 }
 
-/// Scale the alpha channel of an RGBA color by a factor.
+/// RGBA 색상의 알파 채널에 계수를 곱하여 조절합니다.
 fn scale_alpha(color: Rgba<u8>, factor: f64) -> Rgba<u8> {
     let a = (color[3] as f64 * factor).round().clamp(0.0, 255.0) as u8;
     Rgba([color[0], color[1], color[2], a])
 }
 
-/// Render a single ring pair (outer + inner concentric arcs) into a square image of `size` x `size`.
+/// 단일 링 쌍(바깥쪽 + 안쪽 동심원 호)을 `size` x `size` 크기의 정사각형 이미지로 렌더링합니다.
 ///
-/// `session_fill` and `weekly_fill` are 0.0..=1.0 fractions.
+/// `session_fill` 및 `weekly_fill`은 0.0..=1.0 범위의 비율입니다.
 pub fn render_single_ring_pair(params: &RingPairParams) -> RgbaImage {
     let size = params.size;
     let session_fill = params.session_fill;
@@ -280,7 +279,7 @@ pub fn render_single_ring_pair(params: &RingPairParams) -> RgbaImage {
     let center = size as f64 / 2.0;
     let scale = size as f64 / 44.0;
 
-    // Ring geometry (proportional to 44px base size)
+    // 링 기하 구조 (기본 크기 44px에 비례)
     let stroke_width = (4.0 * scale).max(2.0);
     let ring_gap = (2.0 * scale).max(1.0);
 
@@ -289,7 +288,7 @@ pub fn render_single_ring_pair(params: &RingPairParams) -> RgbaImage {
     let inner_r_outer = outer_r_inner - ring_gap;
     let inner_r_inner = inner_r_outer - stroke_width;
 
-    // Track color: dim version of ring color at low alpha
+    // 트랙 색상: 낮은 알파값의 어두운 링 색상
     let track_alpha = 60u8;
     let outer_track = Rgba([outer_color[0], outer_color[1], outer_color[2], track_alpha]);
     let inner_track = Rgba([inner_color[0], inner_color[1], inner_color[2], track_alpha]);
@@ -300,7 +299,7 @@ pub fn render_single_ring_pair(params: &RingPairParams) -> RgbaImage {
             let dy = y as f64 + 0.5 - center;
             let dist = (dx * dx + dy * dy).sqrt();
 
-            // Angle from 12 o'clock, clockwise, 0..1
+            // 12시 방향 기준 시계 방향 각도, 0..1
             let angle = dx.atan2(-dy);
             let norm_angle = if angle < 0.0 {
                 (angle + std::f64::consts::TAU) / std::f64::consts::TAU
@@ -308,7 +307,7 @@ pub fn render_single_ring_pair(params: &RingPairParams) -> RgbaImage {
                 angle / std::f64::consts::TAU
             };
 
-            // Outer ring
+            // 바깥쪽 링
             if dist >= outer_r_inner - 0.5 && dist <= outer_r_outer + 0.5 {
                 let aa = ring_antialias(dist, outer_r_inner, outer_r_outer);
                 if aa > 0.0 {
@@ -321,7 +320,7 @@ pub fn render_single_ring_pair(params: &RingPairParams) -> RgbaImage {
                 }
             }
 
-            // Inner ring (only drawn if show_inner_ring is true)
+            // 안쪽 링 (show_inner_ring이 참일 때만 렌더링)
             if show_inner_ring && dist >= inner_r_inner - 0.5 && dist <= inner_r_outer + 0.5 {
                 let aa = ring_antialias(dist, inner_r_inner, inner_r_outer);
                 if aa > 0.0 {
@@ -336,7 +335,7 @@ pub fn render_single_ring_pair(params: &RingPairParams) -> RgbaImage {
         }
     }
 
-    // Draw centered 5-hour number in the hollow center
+    // 빈 중앙 영역에 5시간 세션 숫자 중앙 정렬하여 그리기
     if let (Some(text), Some(f)) = (center_text, font) {
         draw_centered_number(
             &mut img,
@@ -355,7 +354,7 @@ pub fn render_single_ring_pair(params: &RingPairParams) -> RgbaImage {
     img
 }
 
-/// Render a single provider's ring as a standalone square icon (ideal for Windows notification tray slots).
+/// 단일 제공자의 링을 독립형 정사각형 아이콘으로 렌더링합니다(Windows 알림 트레이 슬롯에 적합).
 #[allow(dead_code)]
 pub fn render_single_provider_ring(
     provider_id: ProviderId,
@@ -399,7 +398,7 @@ pub fn render_single_provider_ring(
     })
 }
 
-/// Render the full ring badge image with customizable ring size and gap.
+/// 사용자 지정 링 크기와 간격으로 전체 링 배지 이미지를 렌더링합니다.
 pub fn render_ring_badge_image_at_size(
     data: &AppUsageData,
     settings: &SettingsFile,
@@ -500,7 +499,7 @@ pub fn render_ring_badge_image_at_size(
     Some(combined)
 }
 
-/// Convert an RgbaImage to top-down, premultiplied BGRA 0xAARRGGBB pixels for Windows DIB / HICON.
+/// Windows DIB / HICON용으로 RgbaImage를 상단 우선(top-down), 사전 곱셈(premultiplied) BGRA 0xAARRGGBB 픽셀로 변환합니다.
 #[allow(dead_code)]
 pub fn rgba_to_bgra_premultiplied(img: &RgbaImage) -> Vec<u32> {
     let mut pixels = Vec::with_capacity((img.width() * img.height()) as usize);
@@ -545,7 +544,7 @@ mod tests {
     fn test_render_single_ring_pair_modes() {
         let font = load_system_font();
 
-        // 1. Dual-ring mode
+        // 1. 듀얼 링 모드
         let img_dual = render_single_ring_pair(&RingPairParams {
             size: 44,
             session_fill: 0.85,
@@ -560,7 +559,7 @@ mod tests {
         assert_eq!(img_dual.width(), 44);
         assert_eq!(img_dual.height(), 44);
 
-        // 2. Single-ring mode (inner ring disabled)
+        // 2. 싱글 링 모드 (안쪽 링 비활성화)
         let img_single = render_single_ring_pair(&RingPairParams {
             size: 44,
             session_fill: 0.85,
@@ -575,7 +574,7 @@ mod tests {
         assert_eq!(img_single.width(), 44);
         assert_eq!(img_single.height(), 44);
 
-        // 3. 32px Windows tray icon size (dual ring)
+        // 3. 32px Windows 트레이 아이콘 크기 (듀얼 링)
         let img_32_dual = render_single_ring_pair(&RingPairParams {
             size: 32,
             session_fill: 0.85,
@@ -590,7 +589,7 @@ mod tests {
         assert_eq!(img_32_dual.width(), 32);
         assert_eq!(img_32_dual.height(), 32);
 
-        // 4. 32px Windows tray icon size (single ring enlarged number)
+        // 4. 32px Windows 트레이 아이콘 크기 (싱글 링 확대 숫자)
         let img_32_single = render_single_ring_pair(&RingPairParams {
             size: 32,
             session_fill: 0.85,
@@ -605,7 +604,7 @@ mod tests {
         assert_eq!(img_32_single.width(), 32);
         assert_eq!(img_32_single.height(), 32);
 
-        // Convert to premultiplied BGRA
+        // 사전 곱셈 BGRA로 변환
         let bgra = rgba_to_bgra_premultiplied(&img_32_dual);
         assert_eq!(bgra.len(), 32 * 32);
         assert!(bgra.iter().any(|&p| (p >> 24) > 0));
@@ -614,7 +613,7 @@ mod tests {
         let _ = img_32_dual.save("target/test_win_tray_dual_32.png");
         let _ = img_32_single.save("target/test_win_tray_single_32.png");
 
-        // Save 4x preview side by side for visual artifact check
+        // 시각적 아티팩트 검사를 위해 4배 확대 미리보기를 나란히 저장
         let mut preview = RgbaImage::new(32 * 2 + 16, 32);
         for y in 0..32 {
             for x in 0..32 {
@@ -642,7 +641,7 @@ mod tests {
 
     #[test]
     fn test_ring_badge_track_alpha_preservation() {
-        // Render a 44px ring with 0% fill so only the track (alpha 60) is rendered.
+        // 0% 채움률로 44px 링을 렌더링하여 트랙(알파 60)만 렌더링되도록 함.
         let img = render_single_ring_pair(&RingPairParams {
             size: 44,
             session_fill: 0.0,
@@ -655,10 +654,10 @@ mod tests {
             show_inner_ring: true,
         });
 
-        // Find pixels in the track region (outer ring stroke).
-        // center is 22.0, outer ring is near radius ~19..20.
-        // Let's sample a point along the horizontal axis: (x=2, y=22) or (x=3, y=22)
-        // distance from (22, 22): for (3.5, 22.5) -> dist = 18.5
+        // 트랙 영역(바깥쪽 링 스트로크)의 픽셀 찾기.
+        // 중심은 22.0이며, 바깥쪽 링 반경은 약 19..20 부근.
+        // 수평축을 따라 샘플링: (x=2, y=22) 또는 (x=3, y=22)
+        // (22, 22)로부터의 거리: (3.5, 22.5)의 경우 -> dist = 18.5
         let center = 22.0f64;
         let mut max_track_alpha = 0u8;
         for y in 0..44 {
@@ -666,7 +665,7 @@ mod tests {
                 let dx = x as f64 + 0.5 - center;
                 let dy = y as f64 + 0.5 - center;
                 let dist = (dx * dx + dy * dy).sqrt();
-                // Outer ring track radius
+                // 바깥쪽 링 트랙 반경
                 if (17.5..=20.0).contains(&dist) {
                     let pixel = img.get_pixel(x, y);
                     if pixel[3] > max_track_alpha {
@@ -676,15 +675,15 @@ mod tests {
             }
         }
 
-        // Track alpha is defined as 60. With anti-aliasing = 1.0, maximum pixel alpha should be 60.
-        // In the buggy implementation, it was (60/255)^2 * 255 = 14!
+        // 트랙 알파는 60으로 정의됨. 안티앨리어싱 = 1.0일 때 최대 픽셀 알파는 60이어야 함.
+        // 기존 버그가 있던 구현에서는 (60/255)^2 * 255 = 14였음!
         assert_eq!(
             max_track_alpha, 60,
             "Track alpha should be 60 at full coverage, but got {}",
             max_track_alpha
         );
 
-        // Also test render_ring_badge_image_at_size with a settings file
+        // 설정 파일을 사용하는 render_ring_badge_image_at_size도 테스트
         let mut settings = SettingsFile::default();
         settings.set_provider_enabled(ProviderId::Claude, true);
         let data = AppUsageData::default();

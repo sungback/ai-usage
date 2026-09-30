@@ -13,7 +13,7 @@ use crate::providers::ProviderId;
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize)]
 pub struct UsageSection {
-    /// The provider reported this window, even if unused and without a reset time.
+    /// 사용되지 않았거나 리셋 시각이 없더라도 공급자가 이 윈도우를 보고했는지 여부입니다.
     pub available: bool,
     pub percentage: f64,
     pub resets_at: Option<SystemTime>,
@@ -32,8 +32,8 @@ impl<'de> Deserialize<'de> for UsageSection {
         }
         let stored = StoredSection::deserialize(deserializer)?;
         Ok(Self {
-            // Older caches lost the distinction between an idle window and an
-            // absent one. Preserve evidence of presence until a fresh poll.
+            // 이전 버전의 캐시는 유휴 윈도우와 부재 윈도우 간의 구분을 잃어버렸습니다.
+            // 새로운 폴링이 수행될 때까지 존재 흔적을 보존합니다.
             available: stored
                 .available
                 .unwrap_or(stored.resets_at.is_some() || stored.percentage != 0.0),
@@ -43,20 +43,18 @@ impl<'de> Deserialize<'de> for UsageSection {
     }
 }
 
-/// Paid credits that carry a provider past its included allowance.
+/// 기본 포함 한도를 초과했을 때 공급자를 계속 사용할 수 있게 해주는 유료 크레딧입니다.
 ///
-/// `None` on [`UsageData`] means the provider has nothing to show: credits are
-/// switched off, unavailable on the plan, or not yet in play because the
-/// included allowance still has room.
+/// [`UsageData`]의 `None`은 표시할 크레딧 정보가 없음을 의미합니다: 크레딧이 꺼져 있거나,
+/// 플랜에서 제공되지 않거나, 기본 한도에 아직 여유가 있어 아직 사용되지 않는 상태입니다.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct CreditsSection {
-    /// Share of the current allowance already consumed, 0 to 100.
+    /// 현재 한도 중 이미 소비된 비율 (0 ~ 100).
     pub percentage: f64,
-    /// What is left, in whole currency units.
+    /// 정수 통화 단위로 표현된 잔여 금액.
     pub remaining: f64,
-    /// What `percentage` is measured against, in whole currency units: a
-    /// plan's cap where there is one, otherwise the balance recorded at the
-    /// last top-up.
+    /// 정수 통화 단위의 기준 한도(총액): 플랜 한도가 있는 경우 해당 상한액,
+    /// 없는 경우 마지막 관측된 충전 시의 잔액입니다.
     pub total: f64,
 }
 
@@ -66,21 +64,20 @@ pub struct UsageData {
     pub weekly: UsageSection,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub weekly_label: Option<String>,
-    /// Optional longer-window usage (e.g. the OpenCode Go monthly window).
-    /// Kept separate from `weekly` so themes can choose how to display it.
+    /// 선택적 장기 윈도우 사용량 (예: OpenCode Go 월간 윈도우).
+    /// 테마가 표시 방식을 선택할 수 있도록 `weekly`와 별도로 유지됩니다.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub monthly: Option<UsageSection>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credits: Option<CreditsSection>,
-    /// True when this reading was carried over from an earlier poll because
-    /// the provider failed this cycle. The figures are real, just not current.
+    /// 이번 주기에서 공급자 호출이 실패하여 이전 폴링의 측정치가 이월된 경우 true입니다.
+    /// 실제 수치이기는 하나 최신 상태는 아닙니다.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub stale: bool,
 }
 
 impl UsageData {
-    /// Display percentage for a gauge value: remaining when counting down,
-    /// consumed otherwise. Always clamped to 0..=100.
+    /// 게이지 표시용 퍼센티지: 카운트다운 모드일 때는 잔여량, 그 외에는 소비량입니다. 항상 0..=100 범위로 제한됩니다.
     pub fn shown(percentage: f64, countdown: bool) -> f64 {
         if countdown {
             (100.0 - percentage).clamp(0.0, 100.0)
@@ -89,26 +86,25 @@ impl UsageData {
         }
     }
 
-    /// 0.0..=1.0 ring fill fraction for a gauge value.
+    /// 게이지용 링 채움 비율 (0.0..=1.0).
     pub fn fill(percentage: f64, countdown: bool) -> f64 {
         Self::shown(percentage, countdown) / 100.0
     }
 }
 
-/// Codex reports a credit balance with no ceiling, so the denominator has to
-/// be learned: any rise in the balance is a top-up, and the balance recorded
-/// at that moment becomes what the gauge measures against until the next one.
+/// Codex는 상한선 없이 크레딧 잔액만 보고하므로 기준 분모를 학습해야 합니다.
+/// 잔액 증가는 충전으로 간주되며, 그 시점에 기록된 잔액이 다음 충전 전까지
+/// 게이지 측정의 기준점이 됩니다.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct CodexCreditsState {
-    /// Account whose balance this state belongs to. Older state files did not
-    /// record it and are deliberately re-seeded when an account ID is now
-    /// available, rather than risking a gauge based on another account.
+    /// 이 상태가 속한 계정 ID입니다. 이전 상태 파일에는 기록되지 않았으며,
+    /// 다른 계정에 기반한 잘못된 게이지가 표시되는 위험을 피하기 위해
+    /// 계정 ID를 사용할 수 있게 되었을 때 의도적으로 다시 시드(seed)합니다.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub account_id: Option<String>,
-    /// Balance seen at the previous poll, in raw credits.
+    /// 직전 폴링에서 확인된 잔액 (원시 크레딧 단위).
     pub balance: f64,
-    /// Balance recorded at the last observed top-up, in raw credits. Seeded
-    /// from the first balance we ever see.
+    /// 마지막으로 관측된 충전 시점의 잔액 (원시 크레딧 단위). 최초 확인된 잔액으로 초기화됩니다.
     pub baseline: f64,
 }
 
@@ -132,8 +128,8 @@ pub struct AccountUsage {
 }
 
 impl AppUsageData {
-    /// Authentication failures stay paused until this source changes or the
-    /// user explicitly asks to retry. Other accounts remain independently live.
+    /// 인증 실패는 이 소스가 변경되거나 사용자가 명시적으로 재시도를 요청할 때까지 일시 정지 상태를 유지합니다.
+    /// 다른 계정들은 독립적으로 정상 폴링됩니다.
     pub fn auth_error_for_source(
         &self,
         provider: ProviderId,
@@ -197,8 +193,8 @@ impl AppUsageData {
         )
     }
 
-    /// Rebuild the legacy provider bindings from the user's selected accounts.
-    /// A missing selection must never display another account's cached usage.
+    /// 사용자가 선택한 계정들로부터 기존 공급자 바인딩을 재구성합니다.
+    /// 선택된 계정이 없더라도 다른 계정의 캐시된 사용량을 표시해서는 안 됩니다.
     pub fn select_accounts(&mut self, settings: &crate::accounts::AccountSettings) {
         for account in &mut self.accounts {
             if let Some(profile) = settings.get(account.provider).and_then(|configured| {
@@ -255,8 +251,8 @@ impl AppUsageData {
             .map(|account| account.profile.name.as_str())
     }
 
-    /// A cached reading must not outlive a login change or a different inherited
-    /// config directory. This only stats files; it never starts a CLI or WSL.
+    /// 캐시된 측정치는 로그인 변경이나 상속된 다른 설정 디렉터리를 넘어서 유지되지 않아야 합니다.
+    /// 파일 상태(stat)만 확인하며, CLI나 WSL을 실행하지 않습니다.
     #[cfg(any(target_os = "macos", test))]
     pub fn invalidate_changed_credentials(&mut self) {
         for account in &mut self.accounts {
@@ -350,9 +346,9 @@ mod tests {
         assert_eq!(UsageData::shown(140.0, true), 0.0);
         assert_eq!(UsageData::fill(140.0, true), 0.0);
     }
-    /// Uses a temporary credential file rather than the real one on this machine:
-    /// `invalidate_changed_credentials` re-reads the source, so a live Claude Code
-    /// re-login between the two reads would otherwise fail the assertion.
+    /// 실제 기기의 파일 대신 임시 자격 증명 파일을 사용합니다:
+    /// `invalidate_changed_credentials`가 소스를 다시 읽으므로, 두 번의 읽기 사이에
+    /// 실제 Claude Code 로그인이 발생하면 단언(assertion)이 실패할 수 있기 때문입니다.
     #[test]
     fn cached_usage_is_dropped_when_the_credential_source_changes() {
         let provider = ProviderId::Claude;
@@ -371,11 +367,10 @@ mod tests {
             credentials_path: path.to_string_lossy().into_owned(),
             ..Default::default()
         };
-        // Fingerprints only: no tokens are decrypted, used, or changed.
+        // 지문만 사용: 어떤 토큰도 복호화, 사용, 변경되지 않습니다.
         for error in [None, Some(crate::poller::PollError::HttpStatus(429))] {
-            // Each round starts from the on-disk state it expects. The signature
-            // is read inside the loop because `file_signature` folds in mtime,
-            // which the filesystem may not advance between two quick writes.
+            // 각 라운드는 예상되는 디스크 상태에서 시작합니다. 빠른 연속 쓰기 시
+            // 파일 시스템이 mtime을 갱신하지 못할 수 있으므로, 루프 내부에서 시그니처를 읽습니다.
             std::fs::write(&path, "fixture before rotation").unwrap();
             let signature = crate::poller::account_source_signature(provider, &path);
             let mut data = AppUsageData::default();
@@ -393,7 +388,7 @@ mod tests {
             cached.invalidate_changed_credentials();
             assert_eq!(cached.accounts, data.accounts);
 
-            // Rotating the token on disk must invalidate the cached reading.
+            // 디스크의 토큰이 변경되면 캐시된 측정치가 무효화되어야 합니다.
             std::fs::write(&path, "fixture after rotation, now longer").unwrap();
             cached.invalidate_changed_credentials();
             assert!(cached.accounts[0].usage.is_none());
