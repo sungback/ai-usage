@@ -83,6 +83,26 @@ pub fn provider_text_color(provider: ProviderId) -> Rgba<u8> {
     }
 }
 
+/// 실패해서 직전 값을 보여주는 중(stale)인 공급자의 회색 링 색상.
+/// 소진(빨강)과 달리 "모르는 상태"임을 한눈에 구분하기 위한 것이다.
+pub fn stale_ring_colors() -> (Rgba<u8>, Rgba<u8>, Rgba<u8>) {
+    (
+        Rgba([130, 130, 130, 255]),
+        Rgba([165, 165, 165, 255]),
+        Rgba([175, 175, 175, 255]),
+    )
+}
+
+/// 링 바깥·안쪽·숫자 색상. stale이면 브랜드색 대신 회색을 돌려준다.
+pub fn ring_colors_for(provider_id: ProviderId, usage: &UsageData) -> (Rgba<u8>, Rgba<u8>, Rgba<u8>) {
+    if usage.stale {
+        stale_ring_colors()
+    } else {
+        let (outer, inner) = provider_ring_palette(provider_id);
+        (outer, inner, provider_text_color(provider_id))
+    }
+}
+
 /// "#RRGGBB" 16진수 색상 문자열을 Rgba로 파싱합니다.
 #[allow(dead_code)]
 pub fn parse_hex_color(hex: &str) -> Option<Rgba<u8>> {
@@ -378,12 +398,15 @@ pub fn render_single_provider_ring(
         None
     };
 
-    let (outer_c, inner_c) = provider_ring_palette(provider_id);
-    let text_color = settings
-        .ring_outer_color
-        .as_deref()
-        .and_then(parse_hex_color)
-        .unwrap_or_else(|| provider_text_color(provider_id));
+    let (outer_c, inner_c, text_color) = ring_colors_for(provider_id, usage);
+    let (outer_c, text_color) = if usage.stale {
+        (outer_c, text_color)
+    } else {
+        match settings.ring_outer_color.as_deref().and_then(parse_hex_color) {
+            Some(custom) => (custom, custom),
+            None => (outer_c, text_color),
+        }
+    };
 
     render_single_ring_pair(&RingPairParams {
         size,
@@ -431,32 +454,16 @@ pub fn render_ring_badge_image_at_size(
             None
         };
 
-        let (default_outer, default_inner) = provider_ring_palette(provider_id);
-
-        let outer_c = if ring_data.is_empty() {
-            settings.ring_outer_color.as_deref()
-                .and_then(parse_hex_color)
-                .unwrap_or(default_outer)
-        } else {
-            default_outer
-        };
-        let inner_c = if ring_data.is_empty() {
-            settings.ring_inner_color.as_deref()
-                .and_then(parse_hex_color)
-                .unwrap_or(default_inner)
-        } else {
-            default_inner
-        };
-
-        let text_color = if ring_data.is_empty() {
-            settings
-                .ring_outer_color
-                .as_deref()
-                .and_then(parse_hex_color)
-                .unwrap_or_else(|| provider_text_color(provider_id))
-        } else {
-            provider_text_color(provider_id)
-        };
+        let (mut outer_c, mut inner_c, mut text_color) = ring_colors_for(provider_id, usage);
+        if !usage.stale && ring_data.is_empty() {
+            if let Some(custom) = settings.ring_outer_color.as_deref().and_then(parse_hex_color) {
+                outer_c = custom;
+                text_color = custom;
+            }
+            if let Some(custom) = settings.ring_inner_color.as_deref().and_then(parse_hex_color) {
+                inner_c = custom;
+            }
+        }
 
         ring_data.push((s_fill, w_fill, outer_c, inner_c, center_num, text_color));
     }
@@ -631,12 +638,35 @@ mod tests {
     }
 
     #[test]
-    fn test_provider_text_colors() {
-        assert_eq!(provider_text_color(ProviderId::Claude), Rgba([255, 138, 61, 255]));
+    fn test_provider_text_colors() {        assert_eq!(provider_text_color(ProviderId::Claude), Rgba([255, 138, 61, 255]));
         assert_eq!(provider_text_color(ProviderId::Codex), Rgba([52, 211, 153, 255]));
         assert_eq!(provider_text_color(ProviderId::Antigravity), Rgba([56, 189, 248, 255]));
         assert_eq!(provider_text_color(ProviderId::Cursor), Rgba([34, 211, 238, 255]));
         assert_eq!(provider_text_color(ProviderId::OpenCode), Rgba([192, 132, 252, 255]));
+    }
+
+    #[test]
+    fn test_stale_usage_renders_gray_instead_of_brand_colors() {
+        let fresh = UsageData {
+            session: crate::models::UsageSection {
+                available: true,
+                percentage: 95.0,
+                resets_at: None,
+            },
+            ..Default::default()
+        };
+        let mut stale = fresh.clone();
+        stale.stale = true;
+
+        let (outer, inner, text) = ring_colors_for(ProviderId::Claude, &fresh);
+        assert_eq!((outer, inner), provider_ring_palette(ProviderId::Claude));
+        assert_eq!(text, provider_text_color(ProviderId::Claude));
+
+        let gray = stale_ring_colors();
+        assert_eq!(ring_colors_for(ProviderId::Claude, &stale), gray);
+        // 빨강(소진)과 회색(실패)이 같은 색이 아니어야 한다.
+        assert_ne!(gray.0, Rgba([255, 0, 0, 255]));
+        assert!(gray.0[0] == gray.0[1] && gray.0[1] == gray.0[2]);
     }
 
     #[test]

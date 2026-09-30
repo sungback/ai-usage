@@ -158,12 +158,13 @@ pub fn compute_tooltip(
             crate::models::UsageData::shown(usage.weekly.percentage, countdown),
         );
         lines.push(format!(
-            "{} - {}: {:.0}% | {}: {:.0}%",
+            "{} - {}: {:.0}% | {}: {:.0}%{}",
             provider_name,
             strings.session_window,
             session_pct,
             usage.weekly_label.as_deref().unwrap_or(strings.weekly_window),
-            weekly_pct
+            weekly_pct,
+            if usage.stale { " ⚠" } else { "" },
         ));
         if let Some(t) = format_reset_time(usage.session.resets_at) {
             lines.push(format!("  {}: {t}", lang.text("Session Reset")));
@@ -205,12 +206,13 @@ pub fn build_context_menu(
                 crate::models::UsageData::shown(usage.weekly.percentage, settings.usage_countdown),
             );
             let header_text = format!(
-                "{} - {}: {:.0}% | {}: {:.0}%",
+                "{} - {}: {:.0}% | {}: {:.0}%{}",
                 provider_name,
                 strings.session_window,
                 session_pct,
                 usage.weekly_label.as_deref().unwrap_or(strings.weekly_window),
-                weekly_pct
+                weekly_pct,
+                if usage.stale { " ⚠" } else { "" },
             );
             let _ = menu.append(&MenuItem::new(header_text, false, None));
             if let Some(reset_str) = format_reset_time(usage.session.resets_at) {

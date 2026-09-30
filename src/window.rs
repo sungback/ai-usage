@@ -831,7 +831,7 @@ fn tray_usage_summary_for_provider(
         .as_deref()
         .unwrap_or(strings.weekly_window);
     Some(format!(
-        "{} {}: {:.0}% | {}: {:.0}%",
+        "{} {}: {:.0}% | {}: {:.0}%{}",
         match data.selected_account_name(provider) {
             Some(name) => format!("{} ({name})", language.text(descriptor.display_name)),
             None => language.text(descriptor.display_name).to_string(),
@@ -840,6 +840,7 @@ fn tray_usage_summary_for_provider(
         shown(usage.session.percentage),
         weekly_label,
         shown(usage.weekly.percentage),
+        if usage.stale { " ⚠" } else { "" },
     ))
 }
 
