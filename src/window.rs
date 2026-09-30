@@ -1759,26 +1759,29 @@ fn total_widget_width() -> i32 {
         .unwrap_or(1)
 }
 
-pub fn run() {
-    let run_args: Vec<String> = std::env::args().collect();
-    let allow_multiple = run_args
-        .iter()
-        .any(|argument| argument == "--allow-multiple");
-    let no_poll = run_args.iter().any(|argument| argument == "--no-poll");
-    unsafe {
-        let _ = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-        CURRENT_DPI.store(GetDpiForSystem(), Ordering::Relaxed);
+/// CLI flags accepted by the Windows entry point.
+struct RunOptions {
+    allow_multiple: bool,
+    no_poll: bool,
+}
+
+fn parse_run_args(args: &[String]) -> RunOptions {
+    RunOptions {
+        allow_multiple: args.iter().any(|argument| argument == "--allow-multiple"),
+        no_poll: args.iter().any(|argument| argument == "--no-poll"),
     }
-    // Single-instance guard: silently exit if another instance is running.
-    // Exception: when relaunched after an explorer restart (ENV_RELAUNCH set),
-    // wait for the previous instance to release the mutex, then take over.
+}
+
+/// Single-instance guard: acquires the global mutex, waiting briefly when a
+/// relaunch races the previous instance. Returns None to exit silently.
+fn acquire_single_instance_mutex(allow_multiple: bool) -> Option<HANDLE> {
     let is_relaunch = std::env::var(ENV_RELAUNCH).is_ok();
     let mutex_name = native_interop::wide_str(&if allow_multiple {
         format!("Global\\AIUsage-{}", std::process::id())
     } else {
         "Global\\AIUsage".to_string()
     });
-    let _mutex = unsafe {
+    unsafe {
         let handle = CreateMutexW(None, true, PCWSTR::from_raw(mutex_name.as_ptr()));
         match handle {
             Ok(h) => {
@@ -1787,26 +1790,32 @@ pub fn run() {
                     if is_relaunch {
                         let wait_result = WaitForSingleObject(h, 10_000);
                         if wait_result != WAIT_OBJECT_0 && wait_result != WAIT_ABANDONED {
-                            return;
+                            return None;
                         }
                     } else {
-                        return;
+                        return None;
                     }
                 }
-                h
+                Some(h)
             }
-            Err(_) => {
-                return;
-            }
+            Err(_) => None,
         }
-    };
+    }
+}
 
+/// Owned resources for the hidden message-loop window class.
+struct WindowClassResources {
+    hinstance: HINSTANCE,
+    class_name: Vec<u16>,
+    large_icon: HICON,
+    small_icon: HICON,
+}
+
+fn register_app_window_class() -> WindowClassResources {
     let class_name = native_interop::wide_str("AIUsage");
-
     unsafe {
         let hinstance = GetModuleHandleW(PCWSTR::null()).unwrap();
         let (large_icon, small_icon) = tray_icon::load_app_icons();
-
         let wc = WNDCLASSEXW {
             cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
             style: CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS,
@@ -1819,118 +1828,152 @@ pub fn run() {
             lpszClassName: PCWSTR::from_raw(class_name.as_ptr()),
             ..Default::default()
         };
-
         let _ = RegisterClassExW(&wc);
+        WindowClassResources {
+            hinstance: HINSTANCE(hinstance.0),
+            class_name,
+            large_icon,
+            small_icon,
+        }
+    }
+}
 
-        let mut settings = load_settings();
-        let classic_theme_path = theme_engine::ensure_starter_theme().ok();
-        let mut configured_theme_path = settings.active_theme_path.as_deref().map(PathBuf::from);
-        let mut configured_theme = configured_theme_path
-            .as_deref()
-            .and_then(|path| theme_engine::load_theme(path).ok());
-        let legacy_placement = settings.legacy_placement();
-        let legacy_visibility = settings.legacy_widget_visibility();
-        if legacy_placement.is_some() || legacy_visibility.is_some() {
-            if configured_theme
-                .as_ref()
-                .is_some_and(|theme| !theme.is_builtin_classic())
-            {
-                // A user-selected writable theme already owns its presentation.
-                // Consume the obsolete settings without replacing that theme.
-                settings.consume_legacy_placement();
-                settings.consume_legacy_widget_visibility();
-                save_settings_or_log(&settings, "unable to consume legacy settings");
-            } else if legacy_placement.is_some() || legacy_visibility == Some(false) {
-                let placement = legacy_placement.map(migrated_theme_placement);
-                let migrated = ThemeDocument::migrated_from_legacy(
-                    placement,
-                    legacy_visibility.unwrap_or(true),
-                );
-                match theme_engine::save_theme(&migrated) {
-                    Ok(path) => {
-                        configured_theme_path = Some(path.clone());
-                        configured_theme = Some(migrated);
-                        settings.active_theme_path = Some(path.to_string_lossy().into_owned());
-                        settings.custom_theme_enabled = true;
-                        settings.consume_legacy_placement();
-                        settings.consume_legacy_widget_visibility();
-                        let _ = save_settings(&settings);
-                    }
-                    Err(_) => {}
+/// Settings, theme, and language resolved before the first window exists.
+struct StartupConfig {
+    settings: SettingsFile,
+    active_theme_path: Option<PathBuf>,
+    active_theme: Option<ThemeDocument>,
+    custom_theme_enabled: bool,
+    theme_clock_interval: Option<Duration>,
+    tray_theme_uses_current_time: bool,
+    language_override: Option<LanguageId>,
+    language: LanguageId,
+}
+
+fn resolve_startup_config() -> StartupConfig {
+    let mut settings = load_settings();
+    let classic_theme_path = theme_engine::ensure_starter_theme().ok();
+    let mut configured_theme_path = settings.active_theme_path.as_deref().map(PathBuf::from);
+    let mut configured_theme = configured_theme_path
+        .as_deref()
+        .and_then(|path| theme_engine::load_theme(path).ok());
+    let legacy_placement = settings.legacy_placement();
+    let legacy_visibility = settings.legacy_widget_visibility();
+    if legacy_placement.is_some() || legacy_visibility.is_some() {
+        if configured_theme
+            .as_ref()
+            .is_some_and(|theme| !theme.is_builtin_classic())
+        {
+            // A user-selected writable theme already owns its presentation.
+            // Consume the obsolete settings without replacing that theme.
+            settings.consume_legacy_placement();
+            settings.consume_legacy_widget_visibility();
+            save_settings_or_log(&settings, "unable to consume legacy settings");
+        } else if legacy_placement.is_some() || legacy_visibility == Some(false) {
+            let placement = legacy_placement.map(migrated_theme_placement);
+            let migrated =
+                ThemeDocument::migrated_from_legacy(placement, legacy_visibility.unwrap_or(true));
+            match theme_engine::save_theme(&migrated) {
+                Ok(path) => {
+                    configured_theme_path = Some(path.clone());
+                    configured_theme = Some(migrated);
+                    settings.active_theme_path = Some(path.to_string_lossy().into_owned());
+                    settings.custom_theme_enabled = true;
+                    settings.consume_legacy_placement();
+                    settings.consume_legacy_widget_visibility();
+                    let _ = save_settings(&settings);
                 }
-            } else {
-                // An explicitly visible v1.4.9 widget already matches the
-                // built-in theme's Render value, so no copy is necessary.
-                settings.consume_legacy_widget_visibility();
-                save_settings_or_log(&settings, "unable to consume legacy visibility");
+                Err(_) => {}
             }
+        } else {
+            // An explicitly visible v1.4.9 widget already matches the
+            // built-in theme's Render value, so no copy is necessary.
+            settings.consume_legacy_widget_visibility();
+            save_settings_or_log(&settings, "unable to consume legacy visibility");
         }
-        let (active_theme_path, active_theme) = configured_theme
-            .map(|theme| (configured_theme_path, Some(theme)))
-            .unwrap_or_else(|| {
-                let path = classic_theme_path;
-                let theme = path
-                    .as_deref()
-                    .and_then(|path| theme_engine::load_theme(path).ok())
-                    .or_else(|| Some(ThemeDocument::starter()));
-                (path, theme)
-            });
-        let custom_theme_enabled = true;
-        let theme_clock_interval = active_theme
-            .as_ref()
-            .and_then(ThemeDocument::current_time_refresh_interval);
-        let tray_theme_uses_current_time = active_theme
-            .as_ref()
-            .is_some_and(theme_tray_uses_current_time);
-        if let Some(path) = &active_theme_path {
-            let path = path.to_string_lossy().into_owned();
-            if settings.active_theme_path.as_deref() != Some(path.as_str())
-                || !settings.custom_theme_enabled
-            {
-                settings.active_theme_path = Some(path);
-                settings.custom_theme_enabled = true;
-                save_settings_or_log(&settings, "unable to persist active theme");
-            }
+    }
+    let (active_theme_path, active_theme) = configured_theme
+        .map(|theme| (configured_theme_path, Some(theme)))
+        .unwrap_or_else(|| {
+            let path = classic_theme_path;
+            let theme = path
+                .as_deref()
+                .and_then(|path| theme_engine::load_theme(path).ok())
+                .or_else(|| Some(ThemeDocument::starter()));
+            (path, theme)
+        });
+    let custom_theme_enabled = true;
+    let theme_clock_interval = active_theme
+        .as_ref()
+        .and_then(ThemeDocument::current_time_refresh_interval);
+    let tray_theme_uses_current_time = active_theme
+        .as_ref()
+        .is_some_and(theme_tray_uses_current_time);
+    if let Some(path) = &active_theme_path {
+        let path = path.to_string_lossy().into_owned();
+        if settings.active_theme_path.as_deref() != Some(path.as_str())
+            || !settings.custom_theme_enabled
+        {
+            settings.active_theme_path = Some(path);
+            settings.custom_theme_enabled = true;
+            save_settings_or_log(&settings, "unable to persist active theme");
         }
-        let language_override = settings.language.as_deref().and_then(LanguageId::from_code);
-        let language = localization::resolve_language(language_override);
-        refresh_theme_host_geometry();
+    }
+    let language_override = settings.language.as_deref().and_then(LanguageId::from_code);
+    let language = localization::resolve_language(language_override);
+    StartupConfig {
+        settings,
+        active_theme_path,
+        active_theme,
+        custom_theme_enabled,
+        theme_clock_interval,
+        tray_theme_uses_current_time,
+        language_override,
+        language,
+    }
+}
 
-        // Create as layered popup (will be reparented into taskbar)
-        let title = native_interop::wide_str(language.strings().window_title);
-        let initial_runtime = ThemeRuntime::from_providers(settings.enabled_providers())
-            .with_poll_state(false, false)
-            .with_language(language)
-            .with_countdown(settings.usage_countdown);
-        let (initial_width, initial_height) = active_theme
-            .as_ref()
-            .map(|theme| {
-                let initial_runtime = theme_runtime_for_surface(theme, 0, initial_runtime);
-                let (width, height) =
-                    theme_engine::resolve_surface_size(theme, 0, None, initial_runtime);
-                let scale = theme_surface_scale(theme, 0);
-                (
-                    scaled_theme_dimension(width, scale),
-                    scaled_theme_dimension(height, scale),
-                )
-            })
-            .unwrap_or((1, 1));
-        let hwnd = CreateWindowExW(
+fn initial_window_size(
+    active_theme: &Option<ThemeDocument>,
+    initial_runtime: ThemeRuntime,
+) -> (i32, i32) {
+    active_theme
+        .as_ref()
+        .map(|theme| {
+            let initial_runtime = theme_runtime_for_surface(theme, 0, initial_runtime);
+            let (width, height) =
+                theme_engine::resolve_surface_size(theme, 0, None, initial_runtime);
+            let scale = theme_surface_scale(theme, 0);
+            (
+                scaled_theme_dimension(width, scale),
+                scaled_theme_dimension(height, scale),
+            )
+        })
+        .unwrap_or((1, 1))
+}
+
+fn create_app_window(class: &WindowClassResources, title: &[u16], width: i32, height: i32) -> HWND {
+    unsafe {
+        CreateWindowExW(
             WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_NOACTIVATE,
-            PCWSTR::from_raw(class_name.as_ptr()),
+            PCWSTR::from_raw(class.class_name.as_ptr()),
             PCWSTR::from_raw(title.as_ptr()),
             WS_POPUP,
             0,
             0,
-            initial_width,
-            initial_height,
+            width,
+            height,
             None,
             None,
-            Some(HINSTANCE(hinstance.0)),
+            Some(HINSTANCE(class.hinstance.0)),
             None,
         )
-        .unwrap();
+        .unwrap()
+    }
+}
 
+fn apply_window_icons(hwnd: HWND, large_icon: HICON, small_icon: HICON) {
+    unsafe {
         if !large_icon.is_invalid() {
             let _ = SendMessageW(
                 hwnd,
@@ -1947,126 +1990,168 @@ pub fn run() {
                 Some(LPARAM(small_icon.0 as isize)),
             );
         }
+    }
+}
 
-        let is_dark = theme::is_dark_mode();
-        {
-            let mut state = lock_state();
-            *state = Some(AppState {
-                hwnd: SendHwnd::from_hwnd(hwnd),
-                taskbar_hwnd: None,
-                tray_notify_hwnd: None,
-                win_event_hook: None,
-                is_dark,
-                embedded: false,
-                language_override,
-                language,
-                providers: settings.enabled_providers(),
-                accounts: settings.accounts.clone(),
-                data: None,
-                poll_interval_ms: settings.poll_interval_ms,
-                retry_count: 0,
-                force_notify_auth_error: false,
-                auth_error_paused_polling: false,
-                auth_watch_mode: poller::CredentialWatchMode::ActiveSource(
-                    settings.enabled_providers().first().unwrap_or_default(),
-                ),
-                auth_watch_snapshot: Vec::new(),
-                last_poll_ok: false,
-                update_status: UpdateStatus::Idle,
-                last_update_check_unix: settings.last_update_check_unix,
-                taskbar_index: settings.taskbar_index,
-                tray_offset: settings.tray_offset,
-                dragging: false,
-                pending_drag: false,
-                drag_start_cursor: POINT::default(),
-                drag_start_origin: POINT::default(),
-                drag_start_client_x: 0,
-                auto_ejected: false,
-                auto_ejected_origin: None,
-                is_switching_window_style: false,
-                is_snapped: false,
-                placement_override: settings.placement_override.clone(),
-                floating_card_opacity: settings.floating_card_opacity,
-                window_state_timer_active: false,
-                custom_theme_enabled,
-                usage_countdown: settings.usage_countdown,
-                taskbar_ring_badge: settings.taskbar_ring_badge,
-                active_theme_path,
-                active_theme,
-                theme_clock_interval,
-                tray_theme_uses_current_time,
-                mirror_hwnds: Vec::new(),
-                desktop_hwnds: Vec::new(),
-                mouse_action_overrides: HashMap::new(),
-                hovered_mouse_layer: None,
-                pending_mouse_click: None,
-                suppress_next_left_up: false,
-            });
-        }
+fn build_initial_state(hwnd: HWND, is_dark: bool, config: &StartupConfig) -> AppState {
+    let settings = &config.settings;
+    AppState {
+        hwnd: SendHwnd::from_hwnd(hwnd),
+        taskbar_hwnd: None,
+        tray_notify_hwnd: None,
+        win_event_hook: None,
+        is_dark,
+        embedded: false,
+        language_override: config.language_override,
+        language: config.language,
+        providers: settings.enabled_providers(),
+        accounts: settings.accounts.clone(),
+        data: None,
+        poll_interval_ms: settings.poll_interval_ms,
+        retry_count: 0,
+        force_notify_auth_error: false,
+        auth_error_paused_polling: false,
+        auth_watch_mode: poller::CredentialWatchMode::ActiveSource(
+            settings.enabled_providers().first().unwrap_or_default(),
+        ),
+        auth_watch_snapshot: Vec::new(),
+        last_poll_ok: false,
+        update_status: UpdateStatus::Idle,
+        last_update_check_unix: settings.last_update_check_unix,
+        taskbar_index: settings.taskbar_index,
+        tray_offset: settings.tray_offset,
+        dragging: false,
+        pending_drag: false,
+        drag_start_cursor: POINT::default(),
+        drag_start_origin: POINT::default(),
+        drag_start_client_x: 0,
+        auto_ejected: false,
+        auto_ejected_origin: None,
+        is_switching_window_style: false,
+        is_snapped: false,
+        placement_override: settings.placement_override.clone(),
+        floating_card_opacity: settings.floating_card_opacity,
+        window_state_timer_active: false,
+        custom_theme_enabled: config.custom_theme_enabled,
+        usage_countdown: settings.usage_countdown,
+        taskbar_ring_badge: settings.taskbar_ring_badge,
+        active_theme_path: config.active_theme_path.clone(),
+        active_theme: config.active_theme.clone(),
+        theme_clock_interval: config.theme_clock_interval,
+        tray_theme_uses_current_time: config.tray_theme_uses_current_time,
+        mirror_hwnds: Vec::new(),
+        desktop_hwnds: Vec::new(),
+        mouse_action_overrides: HashMap::new(),
+        hovered_mouse_layer: None,
+        pending_mouse_click: None,
+        suppress_next_left_up: false,
+    }
+}
 
-        sync_custom_mirrors();
-        native_interop::make_popup(hwnd, false);
+fn run_startup_tasks(hwnd: HWND, no_poll: bool) {
+    sync_custom_mirrors();
+    native_interop::make_popup(hwnd, false);
 
-        // Register the persistent application tray icon.
-        if !no_poll {
-            sync_tray_icon(hwnd);
-        }
+    // Register the persistent application tray icon.
+    if !no_poll {
+        sync_tray_icon(hwnd);
+    }
 
-        // Theme surfaces decide whether their windows render.
-        position_at_taskbar();
+    // Theme surfaces decide whether their windows render.
+    position_at_taskbar();
 
-        // Initial render using the presenter selected by the surface nest.
-        render_layered();
-        schedule_countdown_timer();
-        schedule_clock_timer();
+    // Initial render using the presenter selected by the surface nest.
+    render_layered();
+    schedule_countdown_timer();
+    schedule_clock_timer();
 
-        // Poll timer: 15 minutes
-        let initial_poll_ms = {
-            let state = lock_state();
-            state
-                .as_ref()
-                .map(|s| s.poll_interval_ms)
-                .unwrap_or(POLL_15_MIN)
-        };
+    // Poll timer: 15 minutes
+    let initial_poll_ms = {
+        let state = lock_state();
+        state
+            .as_ref()
+            .map(|s| s.poll_interval_ms)
+            .unwrap_or(POLL_15_MIN)
+    };
+    unsafe {
         SetTimer(Some(hwnd), TIMER_POLL, initial_poll_ms, None);
-        sync_window_state_timer(hwnd);
+    }
+    sync_window_state_timer(hwnd);
 
-        // Watch for explorer.exe restarts so we can re-embed and re-add the tray
-        // icon (the shell discards tray registrations when it restarts). This
-        // runs on a dedicated thread, NOT a window timer: once explorer destroys
-        // the taskbar, our embedded child window stops receiving all messages
-        // (WM_TIMER included), so a timer would never fire again.
-        spawn_taskbar_watchdog();
+    // Watch for explorer.exe restarts so we can re-embed and re-add the tray
+    // icon (the shell discards tray registrations when it restarts). This
+    // runs on a dedicated thread, NOT a window timer: once explorer destroys
+    // the taskbar, our embedded child window stops receiving all messages
+    // (WM_TIMER included), so a timer would never fire again.
+    spawn_taskbar_watchdog();
 
-        // Initial poll
-        if !no_poll {
-            request_poll(hwnd);
-        }
+    // Initial poll
+    if !no_poll {
+        request_poll(hwnd);
+    }
 
-        if !no_poll {
-            schedule_auto_update_check(hwnd);
-        }
-        let should_check_updates = {
-            let state = lock_state();
-            state
-                .as_ref()
-                .map(|s| auto_update_check_due(s.last_update_check_unix))
-                .unwrap_or(false)
-        };
-        if should_check_updates && !no_poll {
-            begin_update_check(hwnd, false);
-        }
+    if !no_poll {
+        schedule_auto_update_check(hwnd);
+    }
+    let should_check_updates = {
+        let state = lock_state();
+        state
+            .as_ref()
+            .map(|s| auto_update_check_due(s.last_update_check_unix))
+            .unwrap_or(false)
+    };
+    if should_check_updates && !no_poll {
+        begin_update_check(hwnd, false);
+    }
 
-        // Initial theme check
-        check_theme_change();
+    // Initial theme check
+    check_theme_change();
+}
 
-        // Message loop
+fn run_message_loop() {
+    unsafe {
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).as_bool() {
             let _ = TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
     }
+}
+
+pub fn run() {
+    let options = parse_run_args(&std::env::args().collect::<Vec<_>>());
+    unsafe {
+        let _ = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        CURRENT_DPI.store(GetDpiForSystem(), Ordering::Relaxed);
+    }
+    let Some(_mutex) = acquire_single_instance_mutex(options.allow_multiple) else {
+        return;
+    };
+
+    let class = register_app_window_class();
+
+    let config = resolve_startup_config();
+    refresh_theme_host_geometry();
+
+    // Create as layered popup (will be reparented into taskbar)
+    let title = native_interop::wide_str(config.language.strings().window_title);
+    let initial_runtime = ThemeRuntime::from_providers(config.settings.enabled_providers())
+        .with_poll_state(false, false)
+        .with_language(config.language)
+        .with_countdown(config.settings.usage_countdown);
+    let (initial_width, initial_height) =
+        initial_window_size(&config.active_theme, initial_runtime);
+    let hwnd = create_app_window(&class, &title, initial_width, initial_height);
+    apply_window_icons(hwnd, class.large_icon, class.small_icon);
+
+    let is_dark = theme::is_dark_mode();
+    {
+        let mut state = lock_state();
+        *state = Some(build_initial_state(hwnd, is_dark, &config));
+    }
+
+    run_startup_tasks(hwnd, options.no_poll);
+    run_message_loop();
 }
 
 /// Render every theme surface, then dispatch it to the presenter selected by
@@ -2790,6 +2875,65 @@ mod poll_display_state_tests {
             poll_display_state(false, 1, true, Some(&stale)),
             (false, true)
         );
+    }
+}
+
+#[cfg(test)]
+mod startup_config_tests {
+    use super::*;
+
+    fn args(flags: &[&str]) -> Vec<String> {
+        flags.iter().map(|flag| flag.to_string()).collect()
+    }
+
+    #[test]
+    fn run_args_default_to_single_instance_with_poll() {
+        let options = parse_run_args(&args(&[]));
+        assert!(!options.allow_multiple);
+        assert!(!options.no_poll);
+    }
+
+    #[test]
+    fn run_args_recognize_allow_multiple_and_no_poll() {
+        let options = parse_run_args(&args(&["--allow-multiple", "--no-poll"]));
+        assert!(options.allow_multiple);
+        assert!(options.no_poll);
+    }
+
+    #[test]
+    fn run_args_ignore_unknown_flags() {
+        let options = parse_run_args(&args(&["--verbose"]));
+        assert!(!options.allow_multiple);
+        assert!(!options.no_poll);
+    }
+
+    fn startup_config() -> StartupConfig {
+        StartupConfig {
+            settings: SettingsFile::default(),
+            active_theme_path: None,
+            active_theme: Some(ThemeDocument::starter()),
+            custom_theme_enabled: true,
+            theme_clock_interval: None,
+            tray_theme_uses_current_time: false,
+            language_override: None,
+            language: LanguageId::Korean,
+        }
+    }
+
+    #[test]
+    fn initial_state_mirrors_settings_and_theme() {
+        let config = startup_config();
+        let hwnd = HWND(std::ptr::null_mut());
+        let state = build_initial_state(hwnd, true, &config);
+        assert_eq!(state.hwnd.to_hwnd(), hwnd);
+        assert!(state.is_dark);
+        assert_eq!(state.providers, config.settings.enabled_providers());
+        assert_eq!(state.accounts, config.settings.accounts);
+        assert_eq!(state.poll_interval_ms, config.settings.poll_interval_ms);
+        assert_eq!(state.usage_countdown, config.settings.usage_countdown);
+        assert!(state.data.is_none());
+        assert!(state.active_theme.is_some());
+        assert_eq!(state.language, LanguageId::Korean);
     }
 }
 
