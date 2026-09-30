@@ -1759,7 +1759,6 @@ fn total_widget_width() -> i32 {
         .unwrap_or(1)
 }
 
-/// CLI flags accepted by the Windows entry point.
 struct RunOptions {
     allow_multiple: bool,
     no_poll: bool,
@@ -1803,7 +1802,6 @@ fn acquire_single_instance_mutex(allow_multiple: bool) -> Option<HANDLE> {
     }
 }
 
-/// Owned resources for the hidden message-loop window class.
 struct WindowClassResources {
     hinstance: HINSTANCE,
     class_name: Vec<u16>,
@@ -2065,7 +2063,7 @@ fn run_startup_tasks(hwnd: HWND, no_poll: bool) {
     schedule_countdown_timer();
     schedule_clock_timer();
 
-    // Poll timer: 15 minutes
+    // Poll timer, using the interval from settings.
     let initial_poll_ms = {
         let state = lock_state();
         state

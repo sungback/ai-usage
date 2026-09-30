@@ -13,7 +13,7 @@ use crate::providers::ProviderId;
 /// 단일 링 배지의 여섯 값 묶음 (세션·주간 채움률, 바깥·안쪽 색, 중앙 숫자, 숫자 색).
 type RingDatum = (f64, f64, Rgba<u8>, Rgba<u8>, Option<String>, Rgba<u8>);
 
-/// 단일 링 쌍 렌더링 파라미터 묶음 (clippy too_many_arguments 회피).
+/// 단일 링 쌍 렌더링에 필요한 파라미터 묶음.
 pub struct RingPairParams<'a> {
     pub size: u32,
     pub session_fill: f64,
@@ -26,7 +26,7 @@ pub struct RingPairParams<'a> {
     pub show_inner_ring: bool,
 }
 
-/// 중앙 숫자 렌더링 파라미터 묶음 (clippy too_many_arguments 회피).
+/// 중앙 숫자 렌더링에 필요한 파라미터 묶음.
 pub struct CenteredNumberParams<'a> {
     pub text: &'a str,
     pub cx: f32,
