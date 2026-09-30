@@ -6,11 +6,11 @@
 //! - 렌더러는 저장된 구조체가 아니라 여기서 다듬은 "장면"만 봅니다.
 //!   그래서 이상한 입력도 복구하고, 파일도 기기·버전을 옮겨 다닙니다.
 //!
-//! Versioned custom theme documents, expression evaluation, and live data binding.
+//! 버전 관리되는 커스텀 테마 문서, 표현식 평가 및 실시간 데이터 바인딩을 제공합니다.
 //!
-//! The renderer deliberately consumes this module's resolved scene rather than the
-//! persisted structs directly. That keeps malformed user input recoverable and
-//! makes theme files portable across machines and future renderer revisions.
+//! 렌더러는 영속화된 구조체를 직접 사용하지 않고, 의도적으로 이 모듈이 해결(resolved)한
+//! 장면(scene)만 소비합니다. 이를 통해 잘못된 사용자 입력이 있어도 복구할 수 있으며,
+//! 기기 간 또는 향후 렌더러 변경 시에도 테마 파일의 이식성을 보장합니다.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -1417,10 +1417,10 @@ impl DataContext {
         let (five_hour, weekly) = usage
             .map(|usage| (usage.session.percentage, usage.weekly.percentage))
             .unwrap_or((0.0, 0.0));
-        // Before Codex windows were classified by duration, a weekly-only
-        // response arrived in the primary slot and was exposed to themes as
-        // `codex.session`. Keep that established binding working for existing
-        // custom themes, while `codex.five_hour` always means the real window.
+        // Codex 사용량 윈도우가 기간별로 분류되기 전에는 주간(weekly) 전용 응답이
+        // 기본 슬롯에 들어와 테마에 `codex.session`으로 노출되었습니다.
+        // 기존 커스텀 테마의 호환성을 위해 이 바인딩을 유지하되,
+        // `codex.five_hour`는 항상 실제 5시간 윈도우를 의미하도록 합니다.
         let use_codex_session_fallback = codex_compatibility
             && usage.is_some_and(|usage| !usage.session.available && usage.weekly.available);
         let session = if use_codex_session_fallback {
@@ -1593,7 +1593,7 @@ impl DataContext {
 
     // 계정 ID는 동적(dynamic)이지만 해당 필드들은 공급자(provider) 바인딩과 동일한 스키마를 사용합니다.
     // 유효성 검사, 시작 시, 삭제 시에 타입이 지정된 기본값을 제공합니다.
-    // unknown fields must still report typos instead of silently becoming zero.
+    // 알 수 없는 필드는 조용히 0이 되는 대신 오타를 보고해야 합니다.
     fn account_default_key(name: &str) -> Option<String> {
         let (provider, rest) = name.strip_prefix("accounts.")?.split_once('.')?;
         let (id, field) = rest.split_once('.')?;
@@ -2026,8 +2026,8 @@ pub fn execute_mouse_actions(
 }
 
 impl ThemeDocument {
-    /// How often a live clock can visibly change. Minute-only clocks avoid the
-    /// much more expensive second-by-second surface rendering path.
+    /// 실시간 시계가 시각적으로 변경될 수 있는 주기입니다. 분 단위 전용 시계는
+    /// 훨씬 비용이 많이 드는 초 단위 서피스 렌더링 경로를 피합니다.
     pub fn current_time_refresh_interval(&self) -> Option<Duration> {
         current_time_refresh_interval_for(self)
     }
@@ -2063,9 +2063,9 @@ impl ThemeDocument {
         theme
     }
 
-    /// Create the writable one-time upgrade target for pre-theme installs.
-    /// Only the primary taskbar surface inherits legacy placement and
-    /// visibility; notification-area roots remain registered with Explorer.
+    /// 테마 시스템 도입 이전 버전을 위한 1회성 쓰기 가능 업그레이드 대상을 생성합니다.
+    /// 기본 작업 표시줄 서피스만 기존 위치와 표시 여부를 상속받으며,
+    /// 알림 영역 루트는 Explorer에 등록된 상태로 유지됩니다.
     pub fn migrated_from_legacy(placement: Option<(usize, i32)>, widget_visible: bool) -> Self {
         let mut theme = Self::starter();
         theme.id = "migrated-theme".into();
@@ -2082,8 +2082,8 @@ impl ThemeDocument {
     }
 
     pub fn prepare_runtime(&mut self) {
-        // The empty-surface path supports documents assembled through the
-        // runtime adapter fields before their root surface is materialized.
+        // 서피스가 비어 있는 경로는 루트 서피스가 실체화되기 전에
+        // 런타임 어댑터 필드를 통해 조립된 문서를 지원합니다.
         if self.surfaces.is_empty() {
             let width = self
                 .canvas

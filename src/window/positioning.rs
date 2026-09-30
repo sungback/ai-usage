@@ -54,8 +54,8 @@ pub(super) fn position_at_taskbar() {
         position_custom_theme(hwnd, &theme, scale);
         return;
     }
-    // Drop the app-state lock before any Win32 call that may synchronously
-    // re-enter our window procedure.
+    // 윈도우 프로시저를 동기적으로 재진입(re-enter)할 수 있는 Win32 API를 호출하기 전에
+    // 앱 상태 락(app-state lock)을 먼저 해제합니다.
     let (hwnd, embedded, tray_offset, taskbar_hwnd) = {
         let state = lock_state();
         let s = match state.as_ref() {
@@ -63,7 +63,7 @@ pub(super) fn position_at_taskbar() {
             None => return,
         };
 
-        // Don't fight the user's drag
+        // 사용자가 드래그 중일 때는 위치를 강제로 맞추지 않습니다.
         if s.dragging {
             return;
         }
@@ -119,11 +119,11 @@ pub(super) fn position_at_taskbar() {
     let widget_height = total_widget_height();
     let y = compute_anchor_y(anchor_top, anchor_height, widget_height);
     if embedded {
-        // Child window: coordinates relative to parent (taskbar)
+        // 자식 윈도우: 부모(작업 표시줄) 기준 상대 좌표
         let x = tray_left - taskbar_rect.left - widget_width - tray_offset;
         native_interop::move_window(hwnd, x, y - taskbar_rect.top, widget_width, widget_height);
     } else {
-        // Topmost popup: screen coordinates
+        // 최상위 팝업: 화면 기준 절대 좌표
         let x = tray_left - widget_width - tray_offset;
         native_interop::move_window(hwnd, x, y, widget_width, widget_height);
     }
@@ -155,13 +155,13 @@ pub(super) fn render_custom_window(
     let width = rendered.width as i32;
     let height = rendered.height as i32;
     unsafe {
-        // Keep the DWM surface alive across frames. Desktop rendering uses a
-        // separate DirectComposition window, so no layered-style reset is
-        // needed here; reparenting resets it once in embed_as_child instead.
+        // 프레임 간에 DWM 서피스를 유지합니다. 데스크톱 렌더링은 별도의
+        // DirectComposition 윈도우를 사용하므로 여기서는 레이어드 방식의 초기화가
+        // 필요하지 않으며, 부모 재지정 시 embed_as_child에서 한 번 초기화됩니다.
         ensure_layered_window(hwnd);
-        // UpdateLayeredWindow expects a screen-compatible destination DC. A
-        // window DC happened to work for taskbar-hosted children, but desktop
-        // WorkerW/DefView composition can discard the resulting surface.
+        // UpdateLayeredWindow는 화면과 호환되는 대상 DC를 요구합니다.
+        // 작업 표시줄 호스팅 자식 윈도우의 경우 윈도우 DC도 동작했지만, 데스크톱
+        // WorkerW/DefView 컴포지션에서는 결과 서피스가 폐기될 수 있습니다.
         let screen_dc = GetDC(None);
         let memory_dc = CreateCompatibleDC(Some(screen_dc));
         let info = BITMAPINFO {
@@ -187,9 +187,9 @@ pub(super) fn render_custom_window(
         let old = SelectObject(memory_dc, bitmap.into());
         let window_pixels = std::slice::from_raw_parts_mut(bits as *mut u32, rendered.pixels.len());
         for (target, source) in window_pixels.iter_mut().zip(&rendered.pixels) {
-            // Windows normally lets mouse input pass through zero-alpha pixels in
-            // layered windows. A nearly transparent pixel keeps the full surface
-            // interactive without changing the theme renderer's pixel output.
+            // Windows는 레이어드 윈도우에서 알파값이 0인 픽셀에 대한 마우스 입력을 기본적으로 통과시킵니다.
+            // 거의 투명한(0x01) 픽셀을 사용하여 테마 렌더러의 시각적 출력에는 영향을 주지 않으면서
+            // 서피스 전체 영역에서 마우스 상호작용이 가능하도록 유지합니다.
             *target = if source >> 24 == 0 {
                 0x0100_0000
             } else {
@@ -507,8 +507,8 @@ pub(super) fn compute_anchor_y(anchor_top: i32, anchor_height: i32, widget_heigh
     (anchor_bottom - widget_height).max(anchor_top)
 }
 
-/// Only the primary window owns the watchdog's docking state. Mirrors may
-/// share its shell thread, but must never replace its target taskbar.
+/// 메인(primary) 윈도우만 워치독의 도킹 상태를 소유합니다. 미러 윈도우는
+/// 동일한 셸 스레드를 공유할 수 있지만, 대상 작업 표시줄을 대체해서는 안 됩니다.
 pub(super) fn record_primary_taskbar(
     state: &mut AppState,
     surface: HWND,
@@ -546,7 +546,7 @@ pub(super) fn ensure_tray_event_hook_for_taskbar(surface: HWND, taskbar: HWND) {
         native_interop::unhook_win_event(hook.to_hook());
     }
     if needed {
-        // Secondary taskbars need events even when they have no TrayNotifyWnd.
+        // 보조 작업 표시줄은 TrayNotifyWnd가 없더라도 이벤트를 수신해야 합니다.
         let thread = native_interop::get_window_thread_id(taskbar);
         let hook = native_interop::set_tray_event_hook(thread, on_tray_location_changed);
         if let Some(state) = lock_state().as_mut() {
@@ -574,19 +574,19 @@ pub(super) fn is_tray_event_source(
     if hwnd.is_invalid() {
         return false;
     }
-    // Never treat our own surface windows as tray events (prevents feedback loops)
+    // 피드백 루프를 방지하기 위해 우리 자체 서피스 윈도우를 트레이 이벤트로 처리하지 않습니다.
     for &our in our_hwnds {
         if our == hwnd || unsafe { IsChild(our, hwnd).as_bool() } {
             return false;
         }
     }
-    // Check if hwnd is TrayNotifyWnd or any descendant (e.g. ToolbarWindow32, SIBTrayButton, SysPager)
+    // hwnd가 TrayNotifyWnd 또는 그 하위 윈도우(예: ToolbarWindow32, SIBTrayButton, SysPager)인지 확인합니다.
     if let Some(tray) = tray_hwnd {
         if tray == hwnd || unsafe { IsChild(tray, hwnd).as_bool() } {
             return true;
         }
     }
-    // Check if hwnd is the taskbar or a child window (e.g. overflow chevron buttons placed directly on Shell_TrayWnd)
+    // hwnd가 작업 표시줄 자체이거나 그 자식 윈도우(예: Shell_TrayWnd 위에 직접 배치된 오버플로 셰브론 버튼)인지 확인합니다.
     if let Some(taskbar) = taskbar_hwnd {
         if taskbar == hwnd || unsafe { IsChild(taskbar, hwnd).as_bool() } {
             return true;
@@ -595,7 +595,7 @@ pub(super) fn is_tray_event_source(
     false
 }
 
-/// WinEvent callback for tray icon location changes
+/// 트레이 아이콘 위치 변경을 감지하는 WinEvent 콜백
 pub(super) unsafe extern "system" fn on_tray_location_changed(
     _hook: HWINEVENTHOOK,
     _event: u32,
@@ -628,8 +628,8 @@ pub(super) unsafe extern "system" fn on_tray_location_changed(
         return;
     }
 
-    // Schedule a trailing-edge timer so that after animations complete or multi-step
-    // layout passes settle, the widget reliably snaps to the final tray position.
+    // 애니메이션이 완료되거나 다단계 레이아웃 패스가 안정된 후
+    // 위젯이 최종 트레이 위치에 안정적으로 맞춰지도록 후행 에지(trailing-edge) 타이머를 예약합니다.
     const TRAY_REPOSITION_TRAILING_DELAY_MS: u32 = 120;
     let _ = SetTimer(
         Some(our_hwnd),
@@ -638,8 +638,8 @@ pub(super) unsafe extern "system" fn on_tray_location_changed(
         None,
     );
 
-    // Also perform an immediate reposition if the tray rect has actually changed,
-    // providing an instant visual response without waiting for the trailing timer.
+    // 또한 트레이 사각형 영역(rect)이 실제로 변경된 경우 즉시 재배치하여
+    // 후행 타이머를 기다리지 않고 즉각적인 시각적 반응을 제공합니다.
     static LAST_TRAY_RECT: Mutex<Option<RECT>> = Mutex::new(None);
     static LAST_IMMEDIATE_REPOSITION: Mutex<Option<std::time::Instant>> = Mutex::new(None);
 
@@ -727,7 +727,7 @@ pub(super) fn widget_frame(
 }
 
 pub(super) fn overlaps_taskbar_apps(taskbar: RECT, slot: RECT, widget: RECT) -> bool {
-    // Auto-hide can change cross-axis bounds without any app collision.
+    // 자동 숨김(Auto-hide)은 앱 충돌 없이도 교차 축 경계를 변경할 수 있습니다.
     if native_interop::is_taskbar_horizontal(taskbar) {
         widget.left < slot.left
     } else {
@@ -816,8 +816,8 @@ pub(super) fn clamped_floating_offset(
     scale: f64,
 ) -> POINT {
     let offset = logical_monitor_offset(point, monitor, scale);
-    // Clamp in logical coordinates too, so rounding at fractional DPI cannot
-    // put the right or bottom edge back outside the monitor.
+    // 소수점 DPI에서 반올림으로 인해 오른쪽이나 아래쪽 가장자리가
+    // 모니터 밖으로 다시 벗어나지 않도록 논리 좌표에서도 범위를 제한(clamp)합니다.
     POINT {
         x: offset.x.clamp(
             0,
@@ -957,7 +957,7 @@ pub(super) fn tasklist_boundary(
     tray_left: i32,
     candidates: impl IntoIterator<Item = RECT>,
 ) -> Option<i32> {
-    // A container that fills the space up to the tray is not an app boundary.
+    // 트레이 영역까지 가득 채우는 컨테이너는 앱 경계로 취급하지 않습니다.
     candidates
         .into_iter()
         .find(|rect| rect.right < tray_left - 10)
@@ -976,10 +976,10 @@ pub(super) fn is_taskbar_capacity_sufficient(
     let slot_h = free_dock_slot.bottom - free_dock_slot.top;
 
     if taskbar_w >= taskbar_h {
-        // Horizontal taskbar
+        // 가로형 작업 표시줄
         slot_w >= widget_width && taskbar_h >= widget_height
     } else {
-        // Vertical taskbar: widget doesn't fit inside narrow vertical bar
+        // 세로형 작업 표시줄: 좁은 세로 막대 내부에는 위젯이 들어가지 않음
         taskbar_w >= widget_width && slot_h >= widget_height
     }
 }

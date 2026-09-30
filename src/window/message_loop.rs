@@ -1,3 +1,8 @@
+//! Windows 메시지 루프 — 처음 보시는 분을 위한 안내.
+//!
+//! - 클릭·타이머·종료 같은 OS 소식을 받아 알맞은 동작(새로고침·이동·종료)으로 연결합니다.
+//! - 드래그 중 캡처를 놓을 때는 상태 스냅샷을 먼저 끝내야 재진입에 안전합니다.
+
 use super::*;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -21,14 +26,14 @@ pub(super) fn release_drag_capture_with(
     take_drag: impl FnOnce() -> DragRelease,
     release_capture: impl FnOnce(),
 ) -> DragRelease {
-    // The snapshot and STATE guard must be finished before ReleaseCapture can
-    // synchronously re-enter WM_CAPTURECHANGED and clear the live drag state.
+    // ReleaseCapture가 WM_CAPTURECHANGED로 동기적으로 재진입하여 실시간 드래그 상태를
+    // 지우기 전에, 스냅샷 생성과 STATE 가드 해제가 반드시 완료되어야 합니다.
     let released = take_drag();
     release_capture();
     released
 }
 
-/// Main window procedure
+/// 메인 윈도우 프로시저
 pub(super) unsafe extern "system" fn wnd_proc(
     hwnd: HWND,
     msg: u32,
@@ -246,8 +251,8 @@ pub(super) unsafe extern "system" fn wnd_proc(
                     let mut state = lock_state();
                     if let Some(s) = state.as_mut() {
                         s.is_switching_window_style = true;
-                        // Native reparenting can dispatch layout messages. They
-                        // must already see a drag and leave its position alone.
+                        // 네이티브 부모 재지정 시 레이아웃 메시지가 디스패치될 수 있습니다.
+                        // 이 메시지들이 드래그 상태를 확인하고 위치를 건드리지 않아야 합니다.
                         s.dragging = true;
                         s.pending_drag = false;
                     }
@@ -505,7 +510,7 @@ pub(super) unsafe extern "system" fn wnd_proc(
                     let displays = native_interop::find_monitors();
                     let (monitor_idx, display) = positioning::monitor_for_point(&displays, pt);
 
-                    // Keep the grabbed content in place as the card expands around it.
+                    // 카드가 주변으로 확장될 때 붙잡은 콘텐츠 위치를 그대로 유지합니다.
                     let widget_w = floating_frame.width;
                     let widget_h = floating_frame.height;
                     let clamped_x = (widget_rect.left - floating_frame.inset).clamp(
@@ -610,8 +615,8 @@ pub(super) unsafe extern "system" fn wnd_proc(
                     bottom: 1080,
                 });
 
-                // Include the card when leaving a vertical taskbar, and keep
-                // the added inset inside the monitor at either screen edge.
+                // 세로형 작업 표시줄을 벗어날 때 카드를 포함하고,
+                // 양쪽 화면 가장자리에서 추가된 인셋(inset)이 모니터 안에 유지되도록 합니다.
                 let mut pt = positioning::auto_eject_origin(floating_rect, taskbar_rect, mon_rect);
                 pt.x = pt.x.clamp(
                     mon_rect.left,
@@ -622,7 +627,7 @@ pub(super) unsafe extern "system" fn wnd_proc(
 
                 s.auto_ejected_origin = Some(pt);
                 s.is_switching_window_style = true;
-                // Parenting/style changes can synchronously re-enter wnd_proc.
+                // 부모 또는 스타일 변경 시 wnd_proc로 동기 재진입이 발생할 수 있습니다.
                 drop(state);
                 native_interop::make_popup(hwnd, true);
                 if let Some(s) = lock_state().as_mut() {
@@ -728,7 +733,7 @@ pub(super) unsafe extern "system" fn wnd_proc(
                         }
                     }
                     save_state_settings();
-                    // Reset the poll timer with the new interval
+                    // 새 주기로 폴링 타이머를 재설정합니다.
                     SetTimer(Some(hwnd), TIMER_POLL, new_interval, None);
                 }
                 id if ProviderId::from_native_menu_command_id(id).is_some() => {
@@ -751,9 +756,9 @@ pub(super) unsafe extern "system" fn wnd_proc(
             LRESULT(0)
         }
         _ if msg == WM_APP_TRAY => {
-            // Explorer can deliver this synchronously, including while a shell
-            // call has re-entered our window procedure. Return before taking
-            // STATE, opening windows, or calling back into Explorer.
+            // Explorer는 셸 호출이 윈도우 프로시저에 재진입한 상태를 포함하여
+            // 이 메시지를 동기적으로 전달할 수 있습니다. STATE 락을 획득하거나
+            // 새 윈도우를 열거나 Explorer로 콜백하기 전에 먼저 반환합니다.
             let _ = PostMessageW(
                 Some(hwnd),
                 native_interop::WM_APP_TRAY_DISPATCH,
@@ -836,9 +841,9 @@ pub(super) unsafe extern "system" fn wnd_proc(
         }
         _ if msg == taskbar_created_message() => {
             refresh_theme_host_geometry();
-            // Explorer discards notification icons when it restarts. Floating
-            // and tray-icon-only themes keep their owner HWND, so restore the
-            // registrations when the shell broadcasts its return.
+            // Explorer가 재시작되면 알림 아이콘이 모두 폐기됩니다. 플로팅 모드 및
+            // 트레이 아이콘 전용 테마는 소유자 HWND를 유지하므로, 셸이 복귀를 브로드캐스트할 때
+            // 등록 정보를 복원합니다.
             sync_tray_icon(hwnd);
             render_layered();
             LRESULT(0)
@@ -874,18 +879,14 @@ pub(super) unsafe extern "system" fn wnd_proc(
 
 #[cfg(test)]
 mod tests {
-//! Windows 메시지 루프 — 처음 보시는 분을 위한 안내.
-//!
-//! - 클릭·타이머·종료 같은 OS 소식을 받아 알맞은 동작(새로고침·이동·종료)으로 연결합니다.
-//! - 드래그 중 캡처를 놓을 때는 상태 스냅샷을 먼저 끝내야 재진입에 안전합니다.
 
 use super::*;
 
     #[test]
     fn tray_callbacks_return_while_state_is_locked_and_preserve_events() {
-        // Model a shell call re-entering wnd_proc while the monitor owns STATE.
-        // Keep the lock on this thread so a regression fails with a timeout
-        // instead of permanently deadlocking the test process.
+        // 모니터가 STATE 락을 보유한 상태에서 셸 호출이 wnd_proc로 재진입하는 상황을 모델링합니다.
+        // 회귀 결함 발생 시 테스트 프로세스가 영구 교착(deadlock)되는 대신 타임아웃으로 실패하도록
+        // 이 스레드에서 락을 유지합니다.
         let state = lock_state();
         let (completed, completion) = std::sync::mpsc::channel();
         let worker = std::thread::spawn(move || unsafe {
@@ -906,8 +907,8 @@ use super::*;
             )
             .expect("create isolated message-only test window");
 
-            // Start with a themed hover: the old handler tries to acquire STATE
-            // here. No dashboard or menu should ever be opened by this test.
+            // 테마 호버(hover)로 시작: 이전 핸들러는 여기서 STATE 락을 획득하려고 시도했습니다.
+            // 이 테스트로 인해 대시보드나 메뉴가 열려서는 안 됩니다.
             let events = [
                 (1_000, WM_MOUSEMOVE),
                 (1_042, WM_LBUTTONUP),
