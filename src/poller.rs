@@ -21,7 +21,7 @@ pub enum PollError {
     NoCredentials,
     TokenExpired,
     RequestFailed,
-    /// Preserve the last HTTP failure so account status can explain the result.
+    /// 마지막 HTTP 실패 상태를 보존하여 계정 상태 표시에 활용합니다.
     HttpStatus(u16),
 }
 
@@ -57,7 +57,7 @@ pub struct PollFailure {
     pub error: PollError,
 }
 
-/// Polling and cache readers must agree on all files an account can read.
+/// 폴러와 캐시 리더는 계정이 접근할 수 있는 모든 파일에 대해 동일한 기준을 가져야 합니다.
 pub fn account_source_signature(provider: ProviderId, path: &std::path::Path) -> String {
     match provider {
         ProviderId::Claude => claude::account_watch_signature(path),
@@ -81,12 +81,12 @@ pub fn poll(
     }
 }
 
-/// Keep the previous reading for any enabled provider that failed this cycle.
+/// 이번 주기에 실패한 공급자가 있으면 이전 데이터를 유지합니다.
 ///
-/// A poll succeeds as long as one provider answers, so without this a single
-/// provider's outage blanks its row on every refresh while the others carry
-/// on updating. The carried figures are marked stale rather than passed off as
-/// current.
+/// 최소 하나의 공급자라도 응답하면 전체 폴링은 성공으로 간주됩니다.
+/// 이를 유지하지 않으면, 한 공급자에 장애가 발생했을 때 다른 공급자가 업데이트되는 동안
+/// 장애가 발생한 공급자의 화면 표시는 매번 빈칸이 됩니다.
+/// 유지된 데이터는 최신 데이터로 취급되지 않고 오래된 값(stale)으로 표시됩니다.
 #[cfg_attr(not(any(windows, test)), allow(dead_code))]
 pub fn carry_forward_failures(
     fresh: AppUsageData,
@@ -132,9 +132,9 @@ fn poll_with(
 
 const MAX_CONCURRENT_PROVIDER_POLLS: usize = 3;
 
-/// Backoff before retrying a failed poll cycle, shared by the Windows message
-/// loop and the macOS poll thread so a failing endpoint is retried on the same
-/// schedule on both platforms: 30s, 60s, 120s… capped at the poll interval.
+/// 실패한 폴링 주기를 재시도하기 전의 백오프(대기 시간) 간격입니다.
+/// Windows 메시지 루프와 macOS 폴링 스레드 간에 공유되어, 
+/// 양쪽 플랫폼 모두 30초, 60초, 120초... 순으로 증가하며 전체 폴링 주기를 초과하지 않습니다.
 pub fn poll_retry_backoff_ms(retry_count: u32, poll_interval_ms: u32) -> u32 {
     const RETRY_BASE_MS: u32 = 30_000;
     let shift = retry_count.saturating_sub(1).min(u32::BITS);
@@ -143,7 +143,7 @@ pub fn poll_retry_backoff_ms(retry_count: u32, poll_interval_ms: u32) -> u32 {
         .min(poll_interval_ms)
 }
 
-/// Wait for a fire-and-forget refresh child to exit, killing it past
+/// 자식 프로세스(새로고침)가 종료될 때까지 대기하고, 일정 시간이 지나면 종료합니다.
 /// `timeout`. Shared by the provider token-refresh spawns.
 pub(crate) fn wait_for_refresh_exit(child: &mut std::process::Child, timeout: Duration) {
     let start = std::time::Instant::now();
@@ -297,7 +297,7 @@ fn antigravity_credential_watch_snapshot(_all_sources: bool) -> CredentialWatchS
 
 fn build_agent() -> Result<ureq::Agent, PollError> {
     static AGENT: OnceLock<Result<ureq::Agent, PollError>> = OnceLock::new();
-    // Agent clones share their connection pool, cookies, and TLS configuration.
+    // 에이전트 클론들은 커넥션 풀, 쿠키, TLS 설정을 공유합니다.
     AGENT
         .get_or_init(|| {
             let tls = ureq::tls::TlsConfig::builder()
@@ -341,13 +341,13 @@ fn unix_to_system_time(unix_secs: Option<i64>) -> Option<SystemTime> {
     Some(UNIX_EPOCH + Duration::from_secs(secs as u64))
 }
 
-/// Parse an ISO 8601 timestamp string into a SystemTime.
+/// ISO 8601 타임스탬프 문자열을 SystemTime으로 파싱합니다.
 fn parse_iso8601(s: Option<&str>) -> Option<SystemTime> {
     let unix_secs = parse_datetime_to_unix(s?)?;
     UNIX_EPOCH.checked_add(Duration::from_secs(unix_secs))
 }
 
-/// Minimal datetime parser — avoids pulling in chrono/time crates.
+/// 최소한의 datetime 파서 — chrono/time 크레이트의 의존성을 피하기 위해 자체 구현합니다.
 fn parse_datetime_to_unix(s: &str) -> Option<u64> {
     let (datetime, offset_seconds) = split_timezone(s)?;
     let datetime = match datetime.split_once('.') {
@@ -460,7 +460,7 @@ fn is_leap(y: u64) -> bool {
     (y.is_multiple_of(4) && !y.is_multiple_of(100)) || y.is_multiple_of(400)
 }
 
-/// Calculate how long until the display text would change
+/// 화면에 표시되는 텍스트가 변경될 때까지 남은 시간을 계산합니다.
 #[cfg_attr(not(windows), allow(dead_code))]
 pub fn time_until_display_change(resets_at: Option<SystemTime>) -> Option<Duration> {
     let reset = resets_at?;
@@ -487,7 +487,7 @@ fn time_until_display_change_from_secs(total_secs: u64) -> Duration {
     Duration::from_secs(total_secs.saturating_sub(current_bucket_start) + 1)
 }
 
-/// Returns true if either section has reached "now" (reset time has passed).
+/// 두 구간 중 하나라도 "현재(now)"에 도달했는지(초기화 시간이 지났는지) 여부를 반환합니다.
 #[cfg_attr(not(any(windows, test)), allow(dead_code))]
 pub fn is_past_reset(data: &UsageData) -> bool {
     if data.stale {

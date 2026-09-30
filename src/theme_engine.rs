@@ -50,8 +50,8 @@ pub struct ThemeDocument {
     pub schema_version: u32,
     pub id: String,
     pub name: String,
-    /// Runtime adapter used by the native window positioning code. The saved
-    /// schema stores these values on the root `SceneObject` instead.
+    /// 네이티브 창 배치 코드에서 사용되는 런타임 어댑터입니다. 
+    /// 저장된 스키마에서는 이 값들을 루트 `SceneObject`에 대신 저장합니다.
     #[serde(skip)]
     pub canvas: Canvas,
     #[serde(skip)]
@@ -62,10 +62,9 @@ pub struct ThemeDocument {
     pub surfaces: Vec<SceneObject>,
 }
 
-/// One visual object in a theme. Root objects are native desktop surfaces and
-/// have `placement`; descendants have `parent` and use `anchor`. Content,
-/// styling, layout, geometry, and the ability to contain children are otherwise
-/// identical at every level.
+/// 테마의 시각적 객체 하나를 나타냅니다. 루트 객체들은 바탕 화면 표면(native desktop surface)이며 
+/// `placement`를 가지고, 자식 객체들은 `parent`를 가지며 `anchor`를 사용합니다. 
+/// 내용, 스타일, 레이아웃, 기하학적 구조 및 자식을 포함할 수 있는 능력은 모든 레벨에서 동일합니다.
 #[derive(Clone, Debug, Serialize)]
 pub struct SceneObject {
     pub id: String,
@@ -106,13 +105,13 @@ pub struct SceneObject {
     pub gap: Expression,
     #[serde(default)]
     pub content: SceneContent,
-    /// Descendants are stored as a flat ordered list on each root. Their
+    /// 자손 객체들은 각 루트에 평면적인 순서 목록으로 저장됩니다.
     /// `parent` ids describe the hierarchy while preserving global z-order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub children: Vec<SceneObject>,
 }
 
-/// Resolved root dimensions used to build expression contexts.
+/// 표현식 컨텍스트를 빌드하는 데 사용되는 확인된 루트 객체의 치수(크기)입니다.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Canvas {
     #[serde(default = "default_canvas_width")]
@@ -131,9 +130,9 @@ pub struct Canvas {
 pub struct Placement {
     #[serde(default)]
     pub reference: ReferenceTarget,
-    /// Controls which native shell host owns a root surface. Older themes did
-    /// not persist this value, so they are normalized from their reference
-    /// region by `prepare_runtime`.
+    /// 어느 네이티브 셸 호스트가 이 루트 표면을 소유할지 제어합니다.
+    /// 구버전 테마에서는 이 값을 저장하지 않았으므로, `prepare_runtime`에서
+    /// 참조 영역(reference region)을 기준으로 값을 정규화합니다.
     #[serde(default = "legacy_surface_nest", alias = "layer")]
     pub nest: SurfaceNest,
     #[serde(default)]
@@ -180,14 +179,13 @@ pub enum ReferenceRegion {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SurfaceNest {
-    /// Transitional value used only while loading themes saved before native
-    /// surface hosting was introduced.
+    /// 네이티브 표면 호스팅 기능이 도입되기 전에 저장된 테마를 로드할 때만 사용되는 과도기적 값입니다.
     #[default]
     Auto,
     Taskbar,
-    /// A genuine Windows notification-area icon. Explorer owns its position,
-    /// overflow state, DPI scaling, and drag ordering; the root object supplies
-    /// the icon artwork.
+    /// 실제 Windows 알림 영역(트레이) 아이콘입니다.
+    /// 파일 탐색기가 아이콘의 위치, 오버플로 상태, DPI 스케일, 드래그 순서를 소유하며,
+    /// 테마의 루트 객체는 아이콘 아트를 제공하기만 합니다.
     TrayIcon,
     Desktop,
     Floating,
@@ -308,9 +306,9 @@ impl SceneObject {
     }
 }
 
-/// Optional, side-effecting mouse handlers for a scene object. Handler text is
-/// parsed as a small action language rather than by the numeric expression
-/// evaluator, keeping ordinary theme expressions deterministic and read-only.
+/// 씬 객체를 위한 선택적이고 부수 효과(side-effect)가 있는 마우스 핸들러입니다.
+    /// 핸들러 텍스트는 숫자 수식 평가기가 아닌 별도의 작은 액션 언어(action language)로 파싱되어,
+    /// 일반적인 테마 수식이 결정론적(deterministic)이고 읽기 전용 상태를 유지하도록 합니다.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MouseEvents {
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -444,14 +442,14 @@ pub enum MouseActionEffect {
     ShowContextMenu(Option<String>),
 }
 
-/// Scheme allowlist for user-supplied URLs: blocks `file:`, `mailto:`, `powershell:` etc.
+/// 사용자가 입력한 URL에 대한 스킴(Scheme) 허용 목록입니다. `file:`, `mailto:`, `powershell:` 등을 차단합니다.
 pub fn supported_url(url: &str) -> bool {
     let url = url.trim().to_ascii_lowercase();
     url.starts_with("https://") || url.starts_with("http://")
 }
 
-/// Parse the deliberately small, line-or-semicolon separated action language.
-/// `open_url("https://example.com")`, `show_context_menu()`,
+/// 고의적으로 단순하게 만들어진 액션 언어(줄바꿈이나 세미콜론으로 구분됨)를 파싱합니다.
+/// 예: `open_url("https://example.com")`, `show_context_menu()`,
 /// `show_context_menu("menu-id")`, `set(self.render, false)`,
 /// `increase("layer-id", height, 10)`, `decrease(self.width, 5)`,
 /// `toggle(self.render)`, and `reset("layer-id", height)`.
@@ -1133,7 +1131,7 @@ pub struct ClipRegion {
 pub struct RenderedTheme {
     pub width: u32,
     pub height: u32,
-    /// Top-down, premultiplied BGRA pixels, represented as 0xAARRGGBB.
+    /// 위에서 아래(Top-down) 방향의, 알파값이 미리 곱해진(premultiplied) BGRA 픽셀들입니다. 0xAARRGGBB 형태로 표현됩니다.
     pub pixels: Vec<u32>,
     pub warnings: Vec<String>,
 }
@@ -1144,18 +1142,18 @@ pub struct DataContext {
     strings: HashMap<String, String>,
 }
 
-/// Runtime environment used by theme expressions and layout. Provider state is
-/// deliberately independent of polling availability so a temporary provider
-/// error never causes the widget to jump or resize.
+/// 테마 수식 및 레이아웃에서 사용되는 런타임 환경입니다.
+/// 공급자(Provider) 상태는 의도적으로 폴링의 성공/실패 여부와 독립적으로 유지되어,
+/// 일시적인 공급자 에러가 발생하더라도 위젯이 갑자기 튀거나 크기가 바뀌지 않게 합니다.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ThemeRuntime {
     providers: ProviderSet,
     pub poll_ok: bool,
     pub has_error: bool,
     pub language: LanguageId,
-    /// Present each allowance as what is left rather than what is spent. Only
-    /// the `.display` values and summaries using them follow this; `.percentage`
-    /// always means consumption so severity thresholds keep their meaning.
+    /// 각 할당량을 "사용된 양" 대신 "남은 양"으로 표시합니다.
+    /// 오직 `.display` 값과 이를 사용하는 요약(summary)에서만 이 설정을 따릅니다.
+    /// 반면 `.percentage`는 경고 임계값(severity thresholds)의 의미를 유지하기 위해 항상 "사용량"을 의미합니다.
     pub countdown: bool,
     pub surface_nest: SurfaceNest,
     pub floating_card_opacity: u8,
@@ -1229,14 +1227,14 @@ impl ThemeRuntime {
         self
     }
 
-    /// Count each allowance down towards its limit instead of up from zero.
+    /// 각 할당량을 0부터 세어 올라가는 대신, 한도(limit)에서 카운트다운(감소)합니다.
     pub fn with_countdown(mut self, countdown: bool) -> Self {
         self.countdown = countdown;
         self
     }
 
-    /// Supply the selected native host's 96-DPI logical dimensions. Theme
-    /// expressions consume these as `host.width` and `host.height`.
+    /// 선택된 네이티브 호스트의 96-DPI 논리적 크기를 제공합니다.
+    /// 테마 수식(Expression)은 이 값들을 `host.width`와 `host.height`로 소비합니다.
     pub fn with_host_dimensions(mut self, width: u32, height: u32) -> Self {
         self.host_width = width.max(1);
         self.host_height = height.max(1);
@@ -1400,8 +1398,8 @@ impl DataContext {
         codex_compatibility: bool,
         countdown: bool,
     ) {
-        // What a gauge or a badge should show. `percentage` stays the share
-        // that has been spent so warning thresholds keep working, while
+        // 게이지(gauge)나 배지가 보여줘야 할 값입니다. 
+        // `percentage`는 경고 임계값이 계속 작동하도록 소비된 비율(share)로 유지됩니다.
         // `display` follows the countdown setting.
         let display = |percentage: f64| {
             if countdown {
@@ -1461,13 +1459,13 @@ impl DataContext {
             monthly.is_some() as u8 as f64,
         );
         self.insert(&format!("{name}.available"), usage.is_some() as u8 as f64);
-        // Carried over from an earlier poll: real figures, not current ones.
+        // 이전 폴링에서 가져온 값입니다: 현재 값은 아니지만 실제 데이터입니다.
         self.insert(
             &format!("{name}.stale"),
             usage.is_some_and(|usage| usage.stale) as u8 as f64,
         );
-        // Credits are absent for most accounts, so `credits.available` is what
-        // a theme should gate the overlay on rather than `available`.
+        // 크레딧은 대부분의 계정에는 존재하지 않으므로, 테마에서 오버레이를 켜고 끌 때는 
+        // `available`보다는 `credits.available`을 기준으로 삼아야 합니다.
         let credits = usage.and_then(|usage| usage.credits.as_ref());
         let credits_percentage = credits.map(|credits| credits.percentage).unwrap_or(0.0);
         self.insert(&format!("{name}.credits.percentage"), credits_percentage);
@@ -1479,7 +1477,7 @@ impl DataContext {
             &format!("{name}.credits.display"),
             display(credits_percentage),
         );
-        // Currency, unlike the percentages either side of it.
+        // 양쪽의 퍼센트(percentage) 값들과는 달리 통화(Currency) 형식입니다.
         self.insert(
             &format!("{name}.credits.balance"),
             credits.map(|credits| credits.remaining).unwrap_or(0.0),
@@ -1492,10 +1490,9 @@ impl DataContext {
             &format!("{name}.credits.available"),
             credits.is_some() as u8 as f64,
         );
-        // The single figure a badge should show: whatever is closest to its
-        // limit. A provider can switch a window off entirely -- Codex has its
-        // five-hour window disabled -- so binding a badge to one window alone
-        // leaves it reporting 0% while another allowance is spent.
+        // 배지가 보여주어야 하는 단일 수치입니다: 한도에 가장 가까운 값을 보여줍니다.
+        // 공급자가 창을 완전히 끌 수도 있습니다 (예: Codex는 5시간 창이 비활성화됨). 
+        // 따라서 배지를 하나의 창에만 바인딩하면, 다른 할당량이 소비되고 있는데도 0%로 표시될 수 있습니다.
         let headline = match credits {
             Some(credits) => credits.percentage,
             None => five_hour.max(weekly),
@@ -1530,8 +1527,8 @@ impl DataContext {
         } else {
             five_hour_available
         };
-        // Presence is independent of percentage and reset times. Monthly
-        // availability remains based on its explicitly optional section.
+        // 퍼센트나 초기화 시간에 관계없이 존재(presence)합니다.
+        // 월별 사용 가능 여부는 명시적으로 선택적인(optional) 섹션을 기반으로 유지됩니다.
         for (window, available) in [
             ("session", session_available),
             ("five_hour", five_hour_available),
@@ -1594,8 +1591,8 @@ impl DataContext {
         })
     }
 
-    // Account IDs are dynamic, but their fields use the same schema as provider
-    // bindings. Supply typed defaults during validation, startup and removal;
+    // 계정 ID는 동적(dynamic)이지만 해당 필드들은 공급자(provider) 바인딩과 동일한 스키마를 사용합니다.
+    // 유효성 검사, 시작 시, 삭제 시에 타입이 지정된 기본값을 제공합니다.
     // unknown fields must still report typos instead of silently becoming zero.
     fn account_default_key(name: &str) -> Option<String> {
         let (provider, rest) = name.strip_prefix("accounts.")?.split_once('.')?;
