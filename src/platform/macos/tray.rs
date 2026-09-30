@@ -31,6 +31,40 @@ fn format_reset_time(resets_at: Option<std::time::SystemTime>) -> Option<String>
     }
 }
 
+fn reset_countdown_header(
+    data: &crate::models::AppUsageData,
+    lang: crate::localization::LanguageId,
+) -> Option<String> {
+    let resets_at = data.earliest_session_reset()?;
+    let remaining = resets_at.duration_since(std::time::SystemTime::now()).ok()?;
+    let strings = lang.strings();
+    let total_mins = remaining.as_secs() / 60;
+    if total_mins == 0 {
+        return Some(format!("⏰ {}", strings.now));
+    }
+    if lang.code() == "ko" {
+        let days = total_mins / (24 * 60);
+        let hours = (total_mins % (24 * 60)) / 60;
+        let mins = total_mins % 60;
+        let body = if days > 0 {
+            format!(
+                "{}{} {}{} {}{}",
+                days, strings.day_suffix, hours, strings.hour_suffix, mins, strings.minute_suffix
+            )
+        } else if hours > 0 {
+            format!("{}{} {}{}", hours, strings.hour_suffix, mins, strings.minute_suffix)
+        } else {
+            format!("{}{}", mins, strings.minute_suffix)
+        };
+        Some(format!("⏰ 세션 리셋까지 {body}"))
+    } else {
+        Some(format!(
+            "⏰ Session reset in {}",
+            format_reset_time(Some(resets_at))?
+        ))
+    }
+}
+
 // ── 메뉴바 툴팁 ────────────────────────────────────────────────────────────
 
 pub fn compute_tooltip(
@@ -81,6 +115,14 @@ pub fn build_context_menu(
 ) -> Menu {
     let menu = Menu::new();
     let strings = lang.strings();
+
+    // 0. 가장 이른 세션 리셋 카운트다운 한 줄
+    if let Some(data) = data {
+        if let Some(header) = reset_countdown_header(data, lang) {
+            let _ = menu.append(&MenuItem::new(header, false, None));
+            let _ = menu.append(&PredefinedMenuItem::separator());
+        }
+    }
 
     // 1. 사용량 요약 헤더
     if let Some(data) = data {

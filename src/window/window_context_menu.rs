@@ -13,14 +13,22 @@ pub(super) fn show_context_menu_document(
         Ok(document) => document,
         Err(_) => context_menu::classic_context_menu(),
     };
-    document.items.push(ContextMenuItem::separator("version-separator"));
-    document
-        .items
-        .push(ContextMenuItem::text("version", &app_version_label()));
     let language = lock_state()
         .as_ref()
         .map(|state| state.language)
         .unwrap_or_else(localization::detect_system_language);
+    let countdown = lock_state()
+        .as_ref()
+        .and_then(|state| state.data.as_ref())
+        .and_then(|data| reset_countdown_header(data, language));
+    if let Some(header) = countdown {
+        document.items.insert(0, ContextMenuItem::separator("reset-countdown-separator"));
+        document.items.insert(0, ContextMenuItem::text("reset-countdown", &header));
+    }
+    document.items.push(ContextMenuItem::separator("version-separator"));
+    document
+        .items
+        .push(ContextMenuItem::text("version", &app_version_label()));
     let data_context = context_menu_data_context(origin.as_ref());
     let mut actions = Vec::new();
     unsafe {
@@ -240,6 +248,43 @@ pub(super) fn context_menu_action_origin(
 
 pub(super) fn app_version_label() -> String {
     format!("AI Usage Monitor v{}", env!("CARGO_PKG_VERSION"))
+}
+
+fn reset_countdown_header(
+    data: &crate::models::AppUsageData,
+    language: crate::localization::LanguageId,
+) -> Option<String> {
+    let resets_at = data.earliest_session_reset()?;
+    let remaining = resets_at.duration_since(std::time::SystemTime::now()).ok()?;
+    let strings = language.strings();
+    let total_mins = remaining.as_secs() / 60;
+    if total_mins == 0 {
+        return Some(format!("⏰ {}", strings.now));
+    }
+    if language.code() == "ko" {
+        let days = total_mins / (24 * 60);
+        let hours = (total_mins % (24 * 60)) / 60;
+        let mins = total_mins % 60;
+        let body = if days > 0 {
+            format!(
+                "{}{} {}{} {}{}",
+                days, strings.day_suffix, hours, strings.hour_suffix, mins, strings.minute_suffix
+            )
+        } else if hours > 0 {
+            format!("{}{} {}{}", hours, strings.hour_suffix, mins, strings.minute_suffix)
+        } else {
+            format!("{}{}", mins, strings.minute_suffix)
+        };
+        Some(format!("⏰ 세션 리셋까지 {body}"))
+    } else {
+        let hours = total_mins / 60;
+        let mins = total_mins % 60;
+        if hours > 0 {
+            Some(format!("⏰ Session reset in {hours}h {mins}m"))
+        } else {
+            Some(format!("⏰ Session reset in {mins}m"))
+        }
+    }
 }
 
 pub(super) fn context_menu_widget_origin(theme: &ThemeDocument) -> Option<(usize, String)> {

@@ -251,6 +251,16 @@ impl AppUsageData {
             .map(|account| account.profile.name.as_str())
     }
 
+    /// 메뉴 맨 윗줄("리셋까지 N시간")용: 세션 리셋 중 가장 이른 미래 시각.
+    /// 과거 시각·없음은 제외하므로 호출자는 None이면 헤더를 숨기면 된다.
+    pub fn earliest_session_reset(&self) -> Option<SystemTime> {
+        let now = SystemTime::now();
+        self.all_usage()
+            .filter_map(|usage| usage.session.resets_at)
+            .filter(|resets_at| *resets_at > now)
+            .min()
+    }
+
     /// 캐시된 측정치는 로그인 변경이나 상속된 다른 설정 디렉터리를 넘어서 유지되지 않아야 합니다.
     /// 파일 상태(stat)만 확인하며, CLI나 WSL을 실행하지 않습니다.
     #[cfg(any(target_os = "macos", test))]
@@ -336,8 +346,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn shown_and_fill_cover_countdown_and_direct_modes() {
-        assert_eq!(UsageData::shown(30.0, true), 70.0);
+    fn shown_and_fill_cover_countdown_and_direct_modes() {        assert_eq!(UsageData::shown(30.0, true), 70.0);
         assert_eq!(UsageData::shown(30.0, false), 30.0);
         assert_eq!(UsageData::fill(30.0, true), 0.7);
         assert_eq!(UsageData::fill(30.0, false), 0.3);
@@ -345,6 +354,47 @@ mod tests {
         assert_eq!(UsageData::shown(140.0, false), 100.0);
         assert_eq!(UsageData::shown(140.0, true), 0.0);
         assert_eq!(UsageData::fill(140.0, true), 0.0);
+    }
+
+    #[test]
+    fn earliest_session_reset_picks_the_nearest_future() {
+        use std::time::Duration;
+        let now = SystemTime::now();
+        let past = now - Duration::from_secs(60);
+        let near = now + Duration::from_secs(3_600);
+        let far = now + Duration::from_secs(7_200);
+        let section = |resets_at: Option<SystemTime>| UsageSection {
+            available: true,
+            percentage: 10.0,
+            resets_at,
+        };
+        let data: AppUsageData = [
+            (
+                ProviderId::Claude,
+                UsageData {
+                    session: section(Some(far)),
+                    ..Default::default()
+                },
+            ),
+            (
+                ProviderId::Codex,
+                UsageData {
+                    session: section(Some(near)),
+                    ..Default::default()
+                },
+            ),
+            (
+                ProviderId::Cursor,
+                UsageData {
+                    session: section(Some(past)),
+                    ..Default::default()
+                },
+            ),
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(data.earliest_session_reset(), Some(near));
+        assert_eq!(AppUsageData::default().earliest_session_reset(), None);
     }
     /// 실제 기기의 파일 대신 임시 자격 증명 파일을 사용합니다:
     /// `invalidate_changed_credentials`가 소스를 다시 읽으므로, 두 번의 읽기 사이에
