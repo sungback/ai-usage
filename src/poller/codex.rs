@@ -387,7 +387,7 @@ fn cli_refresh_codex_token(directory: &Path) {
             return;
         }
     };
-    wait_for_refresh(&mut child);
+    super::wait_for_refresh_exit(&mut child, Duration::from_secs(30));
 }
 
 #[cfg(not(windows))]
@@ -442,21 +442,6 @@ fn resolve_windows_codex_path() -> String {
         }
     }
     "codex.cmd".to_string()
-}
-
-fn wait_for_refresh(child: &mut std::process::Child) {
-    let start = std::time::Instant::now();
-    loop {
-        match child.try_wait() {
-            Ok(Some(_)) => break,
-            Ok(None) if start.elapsed() > Duration::from_secs(30) => {
-                let _ = child.kill();
-                break;
-            }
-            Ok(None) => std::thread::sleep(Duration::from_millis(500)),
-            Err(_) => break,
-        }
-    }
 }
 
 #[cfg(test)]

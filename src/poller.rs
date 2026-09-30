@@ -143,6 +143,23 @@ pub fn poll_retry_backoff_ms(retry_count: u32, poll_interval_ms: u32) -> u32 {
         .min(poll_interval_ms)
 }
 
+/// Wait for a fire-and-forget refresh child to exit, killing it past
+/// `timeout`. Shared by the provider token-refresh spawns.
+pub(crate) fn wait_for_refresh_exit(child: &mut std::process::Child, timeout: Duration) {
+    let start = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if start.elapsed() > timeout => {
+                let _ = child.kill();
+                break;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(500)),
+            Err(_) => break,
+        }
+    }
+}
+
 fn poll_concurrently_with<F>(
     enabled_providers: ProviderSet,
     poll_provider: F,
