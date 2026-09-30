@@ -17,18 +17,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: windows-release
+          cache-on-failure: true
 
       - name: Build release binary
-        env:
-          ANTIGRAVITY_CLIENT_ID: ${{ secrets.ANTIGRAVITY_CLIENT_ID }}
-          ANTIGRAVITY_CLIENT_SECRET: ${{ secrets.ANTIGRAVITY_CLIENT_SECRET }}
         run: cargo build --release
 
       - name: Compute release checksum
@@ -47,11 +45,10 @@ jobs:
 
   build-macos:
     runs-on: macos-latest
-    needs: build
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -60,11 +57,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: macos-release
+          cache-on-failure: true
 
       - name: Build macOS Apple Silicon (ARM64) Binary & App
-        env:
-          ANTIGRAVITY_CLIENT_ID: ${{ secrets.ANTIGRAVITY_CLIENT_ID }}
-          ANTIGRAVITY_CLIENT_SECRET: ${{ secrets.ANTIGRAVITY_CLIENT_SECRET }}
         run: |
           chmod +x scripts/build-macos.sh
           ./scripts/build-macos.sh

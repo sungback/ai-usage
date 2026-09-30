@@ -130,15 +130,8 @@ Claude Code, OpenAI Codex, Google Antigravity, OpenCode Go, Cursor의 사용량 
 
 **별도 설정 없이 빌드됩니다.** Antigravity 폴러가 토큰 갱신에 쓰는 Google OAuth 클라이언트는
 Antigravity 앱 자신의 공개 "installed application" 클라이언트이며, 실행 시 Antigravity가 이미
-저장해 둔 `id_token`에서 클라이언트 ID를 읽어 결정합니다. 기본값도 코드에 포함되어 있어
-`.env` 파일이나 환경변수가 필요 없습니다.
-
-기계별로 다른 값을 쓰고 싶을 때만 `.env`를 생성해 두면 우선 적용됩니다 (`.gitignore`에 등록됨):
-
-```env
-ANTIGRAVITY_CLIENT_ID=your_client_id
-ANTIGRAVITY_CLIENT_SECRET=your_client_secret
-```
+저장해 둔 `id_token`에서 클라이언트 ID를 읽어 결정합니다. 기본값이 코드에 포함되어 있어
+별도 환경변수 설정이 필요 없습니다.
 
 ### macOS (Apple Silicon ARM64) 빌드
 ```bash
@@ -163,15 +156,60 @@ cargo test
 
 ```
 src/
-├── main.rs              엔트리포인트 및 CLI 인자 처리
-├── window.rs            Windows 네이티브 윈도우/메시 루프/트레이
-├── platform/            플랫폼 추상화 (macOS / Windows / generic unix)
-├── theme_engine/        테마 모델, 표현식 평가기, 렌더링
-├── poller/              공급자별 사용량 폴러 (Claude/Codex/Antigravity/...)
-├── context_menu/        컨텍스트 메뉴 모델·빌더·영속화
-├── localization/        한국어 로케일 (TOML)
-├── native_interop/      Win32 FFI, SQLite 바인딩
-└── updater.rs           GitHub Releases 업데이트 (체크섬 검증)
+├── main.rs                   엔트리포인트, 패닉 훅, CLI 인자 처리
+│
+├── platform/                 플랫폼 추상화 (macOS / Windows / generic unix)
+│   ├── mod.rs                  플랫폼별 run() 진입점 디스패치
+│   ├── macos/                  macOS 메뉴바 구현
+│   ├── ring_badge.rs           원형 링 배지 래스터라이저 (Retina 대응)
+│   └── unix.rs                 유닉스 공통 스텁
+│
+├── window.rs                 Windows 네이티브 윈도우 / 메시지 루프 / 작업표시줄 위젯
+│
+├── poller/                   공급자별 사용량 폴러
+│   ├── accounts.rs             계정·자격 증명 공통 로직
+│   ├── claude.rs               Claude Code (CLI / WSL) — 5시간 세션 + 주간 한도
+│   ├── claude_desktop.rs       Claude Desktop 자격 증명 감지
+│   ├── antigravity.rs          Google Antigravity — OAuth2 자동 갱신, Gemini·서드파티 쿼터 분리
+│   ├── codex.rs                OpenAI Codex — 5시간 쿼터 + 주간 한도
+│   ├── cursor.rs               Cursor — 로컬 세션 자동 감지
+│   ├── opencode.rs             OpenCode Go — 워크스페이스 세션 기반
+│   └── tests.rs                폴러 통합 테스트
+│
+├── theme_engine/             테마 시스템
+│   ├── theme_rendering.rs      렌더링 엔진 (사용량 % → 색상·크기 계산)
+│   ├── theme_expression.rs     JSON 테마 표현식 평가기
+│   ├── theme_datetime.rs       날짜·시간 처리
+│   ├── theme_storage.rs        테마 파일 로드·저장
+│   └── tests.rs                테마 엔진 테스트
+│
+├── context_menu/             컨텍스트 메뉴 (Windows 전용)
+│   ├── mod.rs                  메뉴 빌더·이벤트 처리
+│   ├── model.rs                메뉴 데이터 모델
+│   ├── builtins.rs             내장 메뉴 항목 (공급자 토글, 설정 등)
+│   └── io.rs                   메뉴 상태 영속화
+│
+├── localization/             다국어 지원
+│   ├── mod.rs                  로케일 로더
+│   └── locales/ko.toml         한국어 문자열 리소스
+│
+├── native_interop/           네이티브 FFI
+│   ├── win32.rs                Win32 API 래퍼
+│   └── tests.rs                FFI 바인딩 테스트
+│
+├── themes/                   내장 JSON 테마 파일
+│   ├── classic-usage-widget.json
+│   └── compact-fluent-quad.json
+│
+├── app_settings.rs           설정 저장·불러오기 (settings.json)
+├── models.rs                 핵심 데이터 모델 (공급자 상태, 사용량 등)
+├── providers.rs              공급자 목록·메타데이터 정의
+├── updater.rs                GitHub Releases 자동 업데이트 (SHA-256 체크섬 검증)
+├── tray_icon.rs              Windows 시스템 트레이 아이콘
+├── desktop_compositor.rs     Windows Desktop Composition (DirectComposition)
+├── theme.rs                  테마 전환 로직
+├── winsqlite.rs              Windows 내장 SQLite3 바인딩
+└── app.manifest              Windows 애플리케이션 매니페스트 (DPI 인식 등)
 ```
 
 ---

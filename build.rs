@@ -3,7 +3,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 fn main() {
-    load_dotenv_for_build();
     build_locales();
 
     #[cfg(windows)]
@@ -11,32 +10,6 @@ fn main() {
         let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
         if target_os == "windows" {
             embed_windows_resources();
-        }
-    }
-}
-
-// Reads a local, gitignored `.env` file (KEY=VALUE per line) at build time and exposes each
-// entry to the crate being compiled via `cargo:rustc-env`, so `env!("KEY")` in source can pick
-// it up without needing a system/user environment variable set on the build machine.
-fn load_dotenv_for_build() {
-    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
-    let dotenv_path = Path::new(&manifest_dir).join(".env");
-
-    println!("cargo:rerun-if-changed={}", dotenv_path.display());
-
-    let Ok(contents) = fs::read_to_string(&dotenv_path) else {
-        return;
-    };
-
-    for line in contents.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        if let Some((key, value)) = line.split_once('=') {
-            let key = key.trim();
-            let value = value.trim().trim_matches('"');
-            println!("cargo:rustc-env={key}={value}");
         }
     }
 }

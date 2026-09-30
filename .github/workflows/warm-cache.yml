@@ -16,11 +16,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: windows-release
+          cache-on-failure: true
 
       - name: Build release binary
-        env:
-          ANTIGRAVITY_CLIENT_ID: ${{ secrets.ANTIGRAVITY_CLIENT_ID }}
-          ANTIGRAVITY_CLIENT_SECRET: ${{ secrets.ANTIGRAVITY_CLIENT_SECRET }}
         run: cargo build --release
 
   build-macos:
@@ -35,11 +33,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: macos-release
+          cache-on-failure: true
 
       # 캐시 키를 `release.yml`과 맞추려면 타깃·프로파일이 동일해야 하므로,
       # 패키징을 하는 `scripts/build-macos.sh` 대신 cargo 만 돌린다.
       - name: Build aarch64-apple-darwin release binary
-        env:
-          ANTIGRAVITY_CLIENT_ID: ${{ secrets.ANTIGRAVITY_CLIENT_ID }}
-          ANTIGRAVITY_CLIENT_SECRET: ${{ secrets.ANTIGRAVITY_CLIENT_SECRET }}
         run: cargo build --release --target aarch64-apple-darwin
