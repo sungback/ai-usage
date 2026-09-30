@@ -78,6 +78,23 @@ pub struct UsageData {
     pub stale: bool,
 }
 
+impl UsageData {
+    /// Display percentage for a gauge value: remaining when counting down,
+    /// consumed otherwise. Always clamped to 0..=100.
+    pub fn shown(percentage: f64, countdown: bool) -> f64 {
+        if countdown {
+            (100.0 - percentage).clamp(0.0, 100.0)
+        } else {
+            percentage.clamp(0.0, 100.0)
+        }
+    }
+
+    /// 0.0..=1.0 ring fill fraction for a gauge value.
+    pub fn fill(percentage: f64, countdown: bool) -> f64 {
+        Self::shown(percentage, countdown) / 100.0
+    }
+}
+
 /// Codex reports a credit balance with no ceiling, so the denominator has to
 /// be learned: any rise in the balance is a top-up, and the balance recorded
 /// at that moment becomes what the gauge measures against until the next one.
@@ -322,6 +339,17 @@ impl<'de> Deserialize<'de> for AppUsageData {
 mod tests {
     use super::*;
 
+    #[test]
+    fn shown_and_fill_cover_countdown_and_direct_modes() {
+        assert_eq!(UsageData::shown(30.0, true), 70.0);
+        assert_eq!(UsageData::shown(30.0, false), 30.0);
+        assert_eq!(UsageData::fill(30.0, true), 0.7);
+        assert_eq!(UsageData::fill(30.0, false), 0.3);
+        assert_eq!(UsageData::shown(-5.0, false), 0.0);
+        assert_eq!(UsageData::shown(140.0, false), 100.0);
+        assert_eq!(UsageData::shown(140.0, true), 0.0);
+        assert_eq!(UsageData::fill(140.0, true), 0.0);
+    }
     /// Uses a temporary credential file rather than the real one on this machine:
     /// `invalidate_changed_credentials` re-reads the source, so a live Claude Code
     /// re-login between the two reads would otherwise fail the assertion.

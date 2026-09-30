@@ -32,7 +32,7 @@ use crate::app_settings::{
 };
 use crate::context_menu::{self, ContextMenuAction, ContextMenuItem, ContextMenuItemKind};
 use crate::localization::{self, LanguageId, Strings};
-use crate::models::AppUsageData;
+use crate::models::{AppUsageData, UsageData};
 use crate::native_interop::{
     self, TIMER_CLOCK, TIMER_COUNTDOWN, TIMER_MOUSE_CLICK, TIMER_POLL, TIMER_RESET_POLL,
     TIMER_TRAY_HOVER, TIMER_TRAY_REPOSITION, TIMER_UPDATE_CHECK, TIMER_WINDOW_STATE,
@@ -770,13 +770,7 @@ fn tray_usage_summary_lines(
     countdown: bool,
 ) -> Vec<String> {
     let strings = language.strings();
-    let shown = |percentage: f64| {
-        if countdown {
-            100.0 - percentage
-        } else {
-            percentage
-        }
-    };
+    let shown = |percentage: f64| UsageData::shown(percentage, countdown);
     providers
         .iter()
         .filter_map(|provider| {
@@ -834,13 +828,7 @@ fn tray_usage_summary_for_provider(
     let data = data?;
     let usage = data.get(provider)?;
     let strings = language.strings();
-    let shown = |percentage: f64| {
-        if countdown {
-            (100.0 - percentage).clamp(0.0, 100.0)
-        } else {
-            percentage.clamp(0.0, 100.0)
-        }
-    };
+    let shown = |percentage: f64| UsageData::shown(percentage, countdown);
     let descriptor = provider.descriptor();
     let weekly_label = usage
         .weekly_label

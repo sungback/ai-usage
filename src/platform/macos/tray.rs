@@ -48,14 +48,10 @@ pub fn compute_tooltip(
     for (provider, usage) in data.iter() {
         let desc = provider.descriptor();
         let provider_name = lang.text(desc.display_name);
-        let (session_pct, weekly_pct) = if countdown {
-            (
-                (100.0 - usage.session.percentage).clamp(0.0, 100.0),
-                (100.0 - usage.weekly.percentage).clamp(0.0, 100.0),
-            )
-        } else {
-            (usage.session.percentage, usage.weekly.percentage)
-        };
+        let (session_pct, weekly_pct) = (
+            crate::models::UsageData::shown(usage.session.percentage, countdown),
+            crate::models::UsageData::shown(usage.weekly.percentage, countdown),
+        );
         lines.push(format!(
             "{} - {}: {:.0}% | {}: {:.0}%",
             provider_name,
@@ -91,14 +87,10 @@ pub fn build_context_menu(
         for (provider, usage) in data.iter() {
             let desc = provider.descriptor();
             let provider_name = lang.text(desc.display_name);
-            let (session_pct, weekly_pct) = if settings.usage_countdown {
-                (
-                    (100.0 - usage.session.percentage).clamp(0.0, 100.0),
-                    (100.0 - usage.weekly.percentage).clamp(0.0, 100.0),
-                )
-            } else {
-                (usage.session.percentage, usage.weekly.percentage)
-            };
+            let (session_pct, weekly_pct) = (
+                crate::models::UsageData::shown(usage.session.percentage, settings.usage_countdown),
+                crate::models::UsageData::shown(usage.weekly.percentage, settings.usage_countdown),
+            );
             let header_text = format!(
                 "{} - {}: {:.0}% | {}: {:.0}%",
                 provider_name,

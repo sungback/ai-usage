@@ -369,23 +369,11 @@ pub fn render_single_provider_ring(
     let usage = usage.unwrap_or(&default_usage);
     let font = load_system_font();
 
-    let s_fill = if countdown {
-        (100.0 - usage.session.percentage).clamp(0.0, 100.0) / 100.0
-    } else {
-        usage.session.percentage.clamp(0.0, 100.0) / 100.0
-    };
-    let w_fill = if countdown {
-        (100.0 - usage.weekly.percentage).clamp(0.0, 100.0) / 100.0
-    } else {
-        usage.weekly.percentage.clamp(0.0, 100.0) / 100.0
-    };
+    let s_fill = UsageData::fill(usage.session.percentage, countdown);
+    let w_fill = UsageData::fill(usage.weekly.percentage, countdown);
 
     let center_num = if usage.session.available {
-        let s_val = if countdown {
-            (100.0 - usage.session.percentage).clamp(0.0, 100.0)
-        } else {
-            usage.session.percentage.clamp(0.0, 100.0)
-        };
+        let s_val = UsageData::shown(usage.session.percentage, countdown);
         Some(format!("{:.0}", s_val))
     } else {
         None
@@ -434,23 +422,11 @@ pub fn render_ring_badge_image_at_size(
         }
         let usage = data.get(provider_id).unwrap_or(&default_usage);
 
-        let s_fill = if countdown {
-            (100.0 - usage.session.percentage).clamp(0.0, 100.0) / 100.0
-        } else {
-            usage.session.percentage.clamp(0.0, 100.0) / 100.0
-        };
-        let w_fill = if countdown {
-            (100.0 - usage.weekly.percentage).clamp(0.0, 100.0) / 100.0
-        } else {
-            usage.weekly.percentage.clamp(0.0, 100.0) / 100.0
-        };
+        let s_fill = UsageData::fill(usage.session.percentage, countdown);
+        let w_fill = UsageData::fill(usage.weekly.percentage, countdown);
 
         let center_num = if usage.session.available {
-            let s_val = if countdown {
-                (100.0 - usage.session.percentage).clamp(0.0, 100.0)
-            } else {
-                usage.session.percentage.clamp(0.0, 100.0)
-            };
+            let s_val = UsageData::shown(usage.session.percentage, countdown);
             Some(format!("{:.0}", s_val))
         } else {
             None
