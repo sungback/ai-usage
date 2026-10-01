@@ -97,6 +97,15 @@ Claude Code, OpenAI Codex, Google Antigravity, OpenCode Go, Cursor의 사용량 
 
 메뉴 맨 아래에는 실행 중인 버전(`AI Usage Monitor vX.Y.Z`)이 표시됩니다.
 
+### 한 번만 조회하기 (`--json`)
+
+GUI를 띄우지 않고 1회 폴링한 뒤 사용량을 JSON 한 줄로 출력하고 종료합니다.
+스크립트·Raycast 연동용입니다.
+
+```bash
+ai-usage --json | python3 -c "import json,sys; print(json.load(sys.stdin)['codex']['session']['percentage'])"
+```
+
 > 표시 언어는 한국어 단독입니다. 메뉴에 언어 선택 항목이 없습니다.
 
 ---
