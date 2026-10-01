@@ -1194,6 +1194,11 @@ fn begin_update_check(hwnd: HWND, interactive: bool) {
                 save_state_settings();
                 if interactive && show_update_prompt(hwnd, strings, &release) {
                     begin_update_apply(hwnd, release);
+                } else if !interactive {
+                    let message = strings
+                        .update_prompt_now
+                        .replace("{version}", &release.latest_version);
+                    tray_icon::notify_balloon(hwnd, strings.update_available, &message);
                 }
                 unsafe {
                     let _ = PostMessageW(

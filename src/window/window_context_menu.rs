@@ -17,6 +17,18 @@ pub(super) fn show_context_menu_document(
         .as_ref()
         .map(|state| state.language)
         .unwrap_or_else(localization::detect_system_language);
+    if let Some(version) = lock_state().as_ref().and_then(|state| match &state.update_status {
+        UpdateStatus::Available(release) => Some(release.latest_version.clone()),
+        _ => None,
+    }) {
+        if let Some(item) = document.items.iter_mut().find(|item| item.id == "check-for-updates") {
+            item.label = if language.code() == "ko" {
+                format!("⬇ 업데이트 설치 (v{version})")
+            } else {
+                format!("⬇ Install Update (v{version})")
+            };
+        }
+    }
     let countdown = lock_state()
         .as_ref()
         .and_then(|state| state.data.as_ref())
