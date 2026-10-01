@@ -32,7 +32,7 @@ fn main() {
     }));
 
     let args: Vec<String> = std::env::args().collect();
-    if args.iter().any(|arg| arg == "--json") {
+    if should_run_json(&args) {
         std::process::exit(run_json_once());
     }
     if let Some(exit_code) = updater::handle_cli_mode(&args) {
@@ -40,6 +40,10 @@ fn main() {
     }
 
     platform::run();
+}
+
+fn should_run_json(args: &[String]) -> bool {
+    args.iter().any(|arg| arg == "--json")
 }
 
 /// `--json`: 1회 폴링 후 사용량을 JSON 한 줄로 출력하고 종료한다.
@@ -74,5 +78,18 @@ fn run_json_once() -> i32 {
             eprintln!("failed to encode usage as JSON: {error}");
             1
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_should_run_json() {
+        assert!(should_run_json(&["ai-usage".to_string(), "--json".to_string()]));
+        assert!(should_run_json(&["ai-usage".to_string(), "other".to_string(), "--json".to_string()]));
+        assert!(!should_run_json(&["ai-usage".to_string()]));
+        assert!(!should_run_json(&["ai-usage".to_string(), "--not-json".to_string()]));
     }
 }

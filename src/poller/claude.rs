@@ -849,8 +849,10 @@ fn decode_utf16le(bytes: &[u8]) -> Option<String> {
     };
     Some(String::from_utf16_lossy(
         &body
-            .chunks_exact(2)
-            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|chunk| u16::from_le_bytes(*chunk))
             .collect::<Vec<_>>(),
     ))
 }
@@ -860,7 +862,9 @@ fn looks_like_utf16le(bytes: &[u8]) -> bool {
     let units = sample_len / 2;
     units > 0
         && bytes[..sample_len]
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .filter(|chunk| chunk[1] == 0)
             .count()
             * 2

@@ -100,3 +100,56 @@ fn canonical_context_menu_reference(reference: &str) -> &str {
         reference
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_canonical_context_menu_reference() {
+        assert_eq!(
+            canonical_context_menu_reference(LEGACY_CLASSIC_CONTEXT_MENU_ID),
+            CLASSIC_CONTEXT_MENU_ID
+        );
+        assert_eq!(
+            canonical_context_menu_reference("classic-context-menu"),
+            "classic-context-menu"
+        );
+        assert_eq!(
+            canonical_context_menu_reference("custom-menu"),
+            "custom-menu"
+        );
+    }
+
+    #[test]
+    fn test_ensure_and_resolve_builtin_context_menu() {
+        let path = ensure_builtin_context_menus();
+        assert!(path.is_ok(), "ensure_builtin_context_menus should succeed: {:?}", path);
+        let path = path.unwrap();
+        assert!(path.exists());
+
+        let doc = load_context_menu(&path);
+        assert!(doc.is_ok(), "load_context_menu should parse valid menu: {:?}", doc);
+        let doc = doc.unwrap();
+        assert_eq!(doc.id, CLASSIC_CONTEXT_MENU_ID);
+
+        let list = list_context_menus();
+        assert!(list.is_ok());
+        let list = list.unwrap();
+        assert!(list.iter().any(|m| m.id == CLASSIC_CONTEXT_MENU_ID));
+
+        // Resolve by None (defaults to classic)
+        let resolved = resolve_context_menu(None);
+        assert!(resolved.is_ok());
+        assert_eq!(resolved.unwrap().id, CLASSIC_CONTEXT_MENU_ID);
+
+        // Resolve by ID
+        let resolved_id = resolve_context_menu(Some(CLASSIC_CONTEXT_MENU_ID));
+        assert!(resolved_id.is_ok());
+        assert_eq!(resolved_id.unwrap().id, CLASSIC_CONTEXT_MENU_ID);
+
+        // Resolve non-existent menu returns Err
+        let not_found = resolve_context_menu(Some("definitely-unknown-id-xyz-999"));
+        assert!(not_found.is_err());
+    }
+}

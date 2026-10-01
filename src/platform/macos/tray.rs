@@ -396,3 +396,156 @@ pub fn render_compact_menu_badge(
     let (width, height) = (img.width(), img.height());
     Icon::from_rgba(img.into_raw(), width, height).expect("menu bar badge should render")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, SystemTime};
+    use crate::localization::LanguageId;
+    use crate::models::{AppUsageData, UsageData, UsageSection};
+    use crate::providers::ProviderId;
+
+    #[test]
+    fn test_app_version_label() {
+        let label = app_version_label();
+        assert!(label.starts_with("AI Usage Monitor v"));
+        assert!(label.contains(env!("CARGO_PKG_VERSION")));
+    }
+
+    #[test]
+    fn test_format_reset_time() {
+        assert_eq!(format_reset_time(None), None);
+
+        let now = SystemTime::now();
+        let past = now - Duration::from_secs(60);
+        assert_eq!(format_reset_time(Some(past)), Some("Now".to_string()));
+
+        let future_mins = now + Duration::from_secs(45 * 60 + 10);
+        assert_eq!(format_reset_time(Some(future_mins)), Some("45m".to_string()));
+
+        let future_hours = now + Duration::from_secs(3 * 3600 + 15 * 60 + 5);
+        assert_eq!(format_reset_time(Some(future_hours)), Some("3h 15m".to_string()));
+
+        let future_exact_hour = now + Duration::from_secs(3600 + 5);
+        assert_eq!(format_reset_time(Some(future_exact_hour)), Some("1h 0m".to_string()));
+    }
+
+    #[test]
+    fn test_apple_script_string() {
+        assert_eq!(apple_script_string("hello"), "\"hello\"");
+        assert_eq!(apple_script_string("say \"hello\""), "\"say \\\"hello\\\"\"");
+        assert_eq!(apple_script_string("path\\to"), "\"path\\\\to\"");
+    }
+
+    #[test]
+    fn test_alert_remaining() {
+        let now = SystemTime::now();
+        assert_eq!(alert_remaining(None, LanguageId::Korean), None);
+
+        let past = now - Duration::from_secs(10);
+        assert_eq!(alert_remaining(Some(past), LanguageId::Korean), None);
+
+        // 0 mins remaining (under 60s)
+        let almost_now = now + Duration::from_secs(30);
+        assert_eq!(alert_remaining(Some(almost_now), LanguageId::Korean), None);
+
+        // 25 mins (Korean)
+        let mins_25 = now + Duration::from_secs(25 * 60 + 5);
+        assert_eq!(alert_remaining(Some(mins_25), LanguageId::Korean), Some("25분".to_string()));
+
+        // 3 hours 12 mins (Korean)
+        let hours_3 = now + Duration::from_secs(3 * 3600 + 12 * 60 + 5);
+        assert_eq!(alert_remaining(Some(hours_3), LanguageId::Korean), Some("3시간 12분".to_string()));
+
+        // 2 days 5 hours 10 mins (Korean)
+        let days_2 = now + Duration::from_secs(2 * 86400 + 5 * 3600 + 10 * 60 + 5);
+        assert_eq!(alert_remaining(Some(days_2), LanguageId::Korean), Some("2일 5시간 10분".to_string()));
+    }
+
+    #[test]
+    fn test_reset_countdown_header() {
+        let now = SystemTime::now();
+        let mut data = AppUsageData::default();
+
+        // No reset times -> None
+        assert_eq!(reset_countdown_header(&data, LanguageId::Korean), None);
+
+        // Session reset in 2 hours 30 mins (Korean)
+        let mut usage = UsageData::default();
+        usage.session.available = true;
+        usage.session.resets_at = Some(now + Duration::from_secs(2 * 3600 + 30 * 60 + 5));
+        data.insert(ProviderId::Claude, usage);
+
+        let header = reset_countdown_header(&data, LanguageId::Korean);
+        assert!(header.is_some());
+        let text = header.unwrap();
+        assert!(text.contains("⏰ 세션 리셋까지"));
+        assert!(text.contains("2시간 30분"));
+
+        // Days format
+        let mut data_days = AppUsageData::default();
+        let mut usage_days = UsageData::default();
+        usage_days.session.available = true;
+        usage_days.session.resets_at = Some(now + Duration::from_secs(1 * 86400 + 4 * 3600 + 5 * 60 + 5));
+        data_days.insert(ProviderId::Codex, usage_days);
+
+        let header_days = reset_countdown_header(&data_days, LanguageId::Korean).unwrap();
+        assert!(header_days.contains("1일 4시간 5분"));
+
+        // Under 60 seconds (total_mins == 0)
+        let mut data_zero = AppUsageData::default();
+        let mut usage_zero = UsageData::default();
+        usage_zero.session.available = true;
+        usage_zero.session.resets_at = Some(now + Duration::from_secs(30));
+        data_zero.insert(ProviderId::Claude, usage_zero);
+        let header_zero = reset_countdown_header(&data_zero, LanguageId::Korean).unwrap();
+        assert_eq!(header_zero, "⏰ 지금");
+    }
+
+    #[test]
+    fn test_compute_tooltip() {
+        let none_tooltip = compute_tooltip(&None, false, LanguageId::Korean);
+        assert!(none_tooltip.contains("Loading..."));
+
+        let mut data = AppUsageData::default();
+        let usage = UsageData {
+            session: UsageSection {
+                available: true,
+                percentage: 45.0,
+                resets_at: Some(SystemTime::now() + Duration::from_secs(3600)),
+            },
+            weekly: UsageSection {
+                available: true,
+                percentage: 80.0,
+                resets_at: None,
+            },
+            stale: true,
+            ..Default::default()
+        };
+        data.insert(ProviderId::Claude, usage);
+
+        let tooltip = compute_tooltip(&Some(data), false, LanguageId::Korean);
+        assert!(tooltip.contains("Claude Code"));
+        assert!(tooltip.contains("45%"));
+        assert!(tooltip.contains("80%"));
+        assert!(tooltip.contains("⚠")); // stale flag
+    }
+
+    #[test]
+    fn test_render_compact_menu_badge() {
+        let settings = crate::app_settings::SettingsFile::default();
+        let mut data = AppUsageData::default();
+        data.insert(ProviderId::Claude, UsageData {
+            session: UsageSection {
+                available: true,
+                percentage: 50.0,
+                resets_at: None,
+            },
+            ..Default::default()
+        });
+
+        // Test icon rasterization without GUI
+        let _icon = render_compact_menu_badge(&Some(data.clone()), &settings);
+        let _icon_empty = render_compact_menu_badge(&None, &settings);
+    }
+}
