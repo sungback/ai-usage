@@ -9,6 +9,7 @@ use std::time::SystemTime;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+use crate::localization::LanguageId;
 use crate::providers::ProviderId;
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize)]
@@ -281,7 +282,6 @@ impl AppUsageData {
             .filter(|resets_at| *resets_at > now)
             .min()
     }
-
     /// 공급자별 세션 사용량 묶음 (기본 맵 + 선택 계정).
     fn session_entries(&self) -> Vec<(ProviderId, &UsageData)> {
         let mut entries: Vec<(ProviderId, &UsageData)> =
@@ -373,6 +373,117 @@ impl AppUsageData {
             }
         }
     }
+}
+
+/// 공급자별 사용량 요약 줄 데이터입니다.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ProviderUsageSummaryItem {
+    pub key: &'static str,
+    pub header_text: String,
+    pub reset_text: Option<String>,
+}
+
+/// 잔여 시각 포맷 헬퍼 ("3h 57m", "45m", "Now").
+pub fn format_reset_time(resets_at: Option<SystemTime>) -> Option<String> {
+    let resets_at = resets_at?;
+    let now = SystemTime::now();
+    if resets_at > now {
+        let diff = resets_at.duration_since(now).ok()?;
+        let total_mins = diff.as_secs() / 60;
+        let hours = total_mins / 60;
+        let mins = total_mins % 60;
+        if hours > 0 {
+            Some(format!("{hours}h {mins}m"))
+        } else {
+            Some(format!("{mins}m"))
+        }
+    } else {
+        Some("Now".to_string())
+    }
+}
+
+/// 트레이/위젯 컨텍스트 메뉴 최상단 세션 리셋 카운트다운 헤더 문구.
+pub fn reset_countdown_header(
+    data: &AppUsageData,
+    lang: LanguageId,
+) -> Option<String> {
+    let resets_at = data.earliest_session_reset()?;
+    let remaining = resets_at.duration_since(SystemTime::now()).ok()?;
+    let strings = lang.strings();
+    let total_mins = remaining.as_secs() / 60;
+    if total_mins == 0 {
+        return Some(format!("⏰ {}", strings.now));
+    }
+    if lang.code() == "ko" {
+        let days = total_mins / (24 * 60);
+        let hours = (total_mins % (24 * 60)) / 60;
+        let mins = total_mins % 60;
+        let body = if days > 0 {
+            format!(
+                "{}{} {}{} {}{}",
+                days, strings.day_suffix, hours, strings.hour_suffix, mins, strings.minute_suffix
+            )
+        } else if hours > 0 {
+            format!("{}{} {}{}", hours, strings.hour_suffix, mins, strings.minute_suffix)
+        } else {
+            format!("{}{}", mins, strings.minute_suffix)
+        };
+        Some(format!("⏰ 세션 리셋까지 {body}"))
+    } else {
+        Some(format!(
+            "⏰ Session reset in {}",
+            format_reset_time(Some(resets_at))?
+        ))
+    }
+}
+
+/// 컨텍스트 메뉴에 노출할 공급자별 사용량 요약 목록 빌드.
+///
+/// `ordered_providers`가 비어있지 않으면 해당 순서 및 필터링을 따르고,
+/// 비어있다면 `data`에 포함된 모든 공급자를 순회합니다.
+pub fn build_usage_summary_items(
+    data: &AppUsageData,
+    ordered_providers: &[ProviderId],
+    countdown: bool,
+    lang: LanguageId,
+) -> Vec<ProviderUsageSummaryItem> {
+    let strings = lang.strings();
+    let providers_to_show: Vec<ProviderId> = if ordered_providers.is_empty() {
+        data.iter().map(|(p, _)| p).collect()
+    } else {
+        ordered_providers.to_vec()
+    };
+
+    let mut items = Vec::new();
+    for provider in providers_to_show {
+        if let Some(usage) = data.get(provider) {
+            let desc = provider.descriptor();
+            let provider_name = lang.text(desc.display_name);
+            let (session_pct, weekly_pct) = (
+                UsageData::shown(usage.session.percentage, countdown),
+                UsageData::shown(usage.weekly.percentage, countdown),
+            );
+            let header_text = format!(
+                "{} - {}: {:.0}% | {}: {:.0}%{}",
+                provider_name,
+                strings.session_window,
+                session_pct,
+                usage.weekly_label.as_deref().unwrap_or(strings.weekly_window),
+                weekly_pct,
+                if usage.stale { " ⚠" } else { "" },
+            );
+            let reset_text = format_reset_time(usage.session.resets_at).map(|reset_str| {
+                format!("  {} {reset_str}", lang.text("Resets in:"))
+            });
+            items.push(ProviderUsageSummaryItem {
+                key: desc.key,
+                header_text,
+                reset_text,
+            });
+        }
+    }
+
+    items
 }
 
 impl FromIterator<(ProviderId, UsageData)> for AppUsageData {
@@ -681,5 +792,98 @@ mod tests {
         );
         assert!(decoded.get(ProviderId::Antigravity).is_none());
         assert!(decoded.get(ProviderId::OpenCode).is_none());
+    }
+
+    #[test]
+    fn test_format_reset_time() {
+        assert_eq!(format_reset_time(None), None);
+
+        let now = SystemTime::now();
+        let past = now - std::time::Duration::from_secs(60);
+        assert_eq!(format_reset_time(Some(past)), Some("Now".to_string()));
+
+        let future_mins = now + std::time::Duration::from_secs(45 * 60 + 10);
+        assert_eq!(format_reset_time(Some(future_mins)), Some("45m".to_string()));
+
+        let future_hours = now + std::time::Duration::from_secs(3 * 3600 + 15 * 60 + 5);
+        assert_eq!(format_reset_time(Some(future_hours)), Some("3h 15m".to_string()));
+
+        let future_exact_hour = now + std::time::Duration::from_secs(3600 + 5);
+        assert_eq!(format_reset_time(Some(future_exact_hour)), Some("1h 0m".to_string()));
+    }
+
+    #[test]
+    fn test_reset_countdown_header() {
+        let now = SystemTime::now();
+        let mut data = AppUsageData::default();
+
+        assert_eq!(reset_countdown_header(&data, LanguageId::Korean), None);
+
+        let mut usage = UsageData::default();
+        usage.session.available = true;
+        usage.session.resets_at = Some(now + std::time::Duration::from_secs(2 * 3600 + 30 * 60 + 5));
+        data.insert(ProviderId::Claude, usage);
+
+        let header = reset_countdown_header(&data, LanguageId::Korean);
+        assert!(header.is_some());
+        let text = header.unwrap();
+        assert!(text.contains("⏰ 세션 리셋까지"));
+        assert!(text.contains("2시간 30분"));
+    }
+
+    #[test]
+    fn test_build_usage_summary_items() {
+        let now = SystemTime::now();
+        let mut data = AppUsageData::default();
+
+        let mut claude_usage = UsageData::default();
+        claude_usage.session.percentage = 72.0;
+        claude_usage.session.resets_at = Some(now + std::time::Duration::from_secs(3 * 3600 + 57 * 60 + 5));
+        claude_usage.weekly.percentage = 42.0;
+        data.insert(ProviderId::Claude, claude_usage);
+
+        let mut codex_usage = UsageData::default();
+        codex_usage.session.percentage = 96.0;
+        codex_usage.session.resets_at = Some(now + std::time::Duration::from_secs(3600 + 12 * 60 + 5));
+        codex_usage.weekly.percentage = 75.0;
+        data.insert(ProviderId::Codex, codex_usage);
+
+        let mut anti_usage = UsageData::default();
+        anti_usage.session.percentage = 100.0;
+        anti_usage.session.resets_at = Some(now + std::time::Duration::from_secs(4 * 3600 + 59 * 60 + 5));
+        anti_usage.weekly.percentage = 59.0;
+        anti_usage.stale = true;
+        data.insert(ProviderId::Antigravity, anti_usage);
+
+        // Standard used mode (countdown = false)
+        let items = build_usage_summary_items(
+            &data,
+            &[ProviderId::Claude, ProviderId::Codex, ProviderId::Antigravity],
+            false,
+            LanguageId::Korean,
+        );
+        assert_eq!(items.len(), 3);
+
+        assert_eq!(items[0].key, "claude");
+        assert!(items[0].header_text.contains("Claude Code - 5시간: 72% | 7일: 42%"));
+        assert_eq!(items[0].reset_text.as_deref(), Some("  Resets in: 3h 57m"));
+
+        assert_eq!(items[1].key, "codex");
+        assert!(items[1].header_text.contains("Codex - 5시간: 96% | 7일: 75%"));
+        assert_eq!(items[1].reset_text.as_deref(), Some("  Resets in: 1h 12m"));
+
+        assert_eq!(items[2].key, "antigravity");
+        assert!(items[2].header_text.contains("Antigravity - 5시간: 100% | 7일: 59% ⚠"));
+        assert_eq!(items[2].reset_text.as_deref(), Some("  Resets in: 4h 59m"));
+
+        // Remaining mode (countdown = true)
+        let remaining_items = build_usage_summary_items(
+            &data,
+            &[ProviderId::Claude],
+            true,
+            LanguageId::Korean,
+        );
+        assert_eq!(remaining_items.len(), 1);
+        assert!(remaining_items[0].header_text.contains("Claude Code - 5시간: 28% | 7일: 58%"));
     }
 }

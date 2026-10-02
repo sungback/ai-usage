@@ -1,4 +1,4 @@
-﻿code = "ko"
+code = "ko"
 native_name = "한국어"
 locale_patterns = ["ko"]
 order = 0
@@ -56,6 +56,7 @@ cursor_token_expired_body = "Sign in to Cursor (or set CURSOR_SESSION_TOKEN), th
 "Every minute" = "매분"
 "Exit" = "종료"
 "Gradient" = "그라데이션"
+"Loading usage..." = "사용량 불러오는 중..."
 "OpenCode" = "OpenCode"
 "Provider" = "제공자"
 "Providers" = "공급자"

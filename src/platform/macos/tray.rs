@@ -11,59 +11,7 @@ pub fn app_version_label() -> String {
     format!("AI Usage Monitor v{}", env!("CARGO_PKG_VERSION"))
 }
 
-// ── 내부 포맷 헬퍼 ─────────────────────────────────────────────────────────
-
-fn format_reset_time(resets_at: Option<std::time::SystemTime>) -> Option<String> {
-    let resets_at = resets_at?;
-    let now = std::time::SystemTime::now();
-    if resets_at > now {
-        let diff = resets_at.duration_since(now).ok()?;
-        let total_mins = diff.as_secs() / 60;
-        let hours = total_mins / 60;
-        let mins = total_mins % 60;
-        if hours > 0 {
-            Some(format!("{hours}h {mins}m"))
-        } else {
-            Some(format!("{mins}m"))
-        }
-    } else {
-        Some("Now".to_string())
-    }
-}
-
-fn reset_countdown_header(
-    data: &crate::models::AppUsageData,
-    lang: crate::localization::LanguageId,
-) -> Option<String> {
-    let resets_at = data.earliest_session_reset()?;
-    let remaining = resets_at.duration_since(std::time::SystemTime::now()).ok()?;
-    let strings = lang.strings();
-    let total_mins = remaining.as_secs() / 60;
-    if total_mins == 0 {
-        return Some(format!("⏰ {}", strings.now));
-    }
-    if lang.code() == "ko" {
-        let days = total_mins / (24 * 60);
-        let hours = (total_mins % (24 * 60)) / 60;
-        let mins = total_mins % 60;
-        let body = if days > 0 {
-            format!(
-                "{}{} {}{} {}{}",
-                days, strings.day_suffix, hours, strings.hour_suffix, mins, strings.minute_suffix
-            )
-        } else if hours > 0 {
-            format!("{}{} {}{}", hours, strings.hour_suffix, mins, strings.minute_suffix)
-        } else {
-            format!("{}{}", mins, strings.minute_suffix)
-        };
-        Some(format!("⏰ 세션 리셋까지 {body}"))
-    } else {
-        Some(format!(
-            "⏰ Session reset in {}",
-            format_reset_time(Some(resets_at))?
-        ))
-    }
-}
+use crate::models::{build_usage_summary_items, format_reset_time, reset_countdown_header};
 
 // ── 임계치 경고 OS 알림 ───────────────────────────────────────────────────
 
@@ -186,7 +134,6 @@ pub fn build_context_menu(
     lang: crate::localization::LanguageId,
 ) -> Menu {
     let menu = Menu::new();
-    let strings = lang.strings();
 
     // 0. 가장 이른 세션 리셋 카운트다운 한 줄
     if let Some(data) = data {
@@ -198,29 +145,16 @@ pub fn build_context_menu(
 
     // 1. 사용량 요약 헤더
     if let Some(data) = data {
-        for (provider, usage) in data.iter() {
-            let desc = provider.descriptor();
-            let provider_name = lang.text(desc.display_name);
-            let (session_pct, weekly_pct) = (
-                crate::models::UsageData::shown(usage.session.percentage, settings.usage_countdown),
-                crate::models::UsageData::shown(usage.weekly.percentage, settings.usage_countdown),
-            );
-            let header_text = format!(
-                "{} - {}: {:.0}% | {}: {:.0}%{}",
-                provider_name,
-                strings.session_window,
-                session_pct,
-                usage.weekly_label.as_deref().unwrap_or(strings.weekly_window),
-                weekly_pct,
-                if usage.stale { " ⚠" } else { "" },
-            );
-            let _ = menu.append(&MenuItem::new(header_text, false, None));
-            if let Some(reset_str) = format_reset_time(usage.session.resets_at) {
-                let _ = menu.append(&MenuItem::new(
-                    format!("  {} {reset_str}", lang.text("Resets in:")),
-                    false,
-                    None,
-                ));
+        let summaries = build_usage_summary_items(
+            data,
+            &settings.enabled_ordered_providers(),
+            settings.usage_countdown,
+            lang,
+        );
+        for item in summaries {
+            let _ = menu.append(&MenuItem::new(item.header_text, false, None));
+            if let Some(reset_text) = item.reset_text {
+                let _ = menu.append(&MenuItem::new(reset_text, false, None));
             }
         }
     } else {
@@ -486,7 +420,7 @@ mod tests {
         let mut data_days = AppUsageData::default();
         let mut usage_days = UsageData::default();
         usage_days.session.available = true;
-        usage_days.session.resets_at = Some(now + Duration::from_secs(1 * 86400 + 4 * 3600 + 5 * 60 + 5));
+        usage_days.session.resets_at = Some(now + Duration::from_secs(86400 + 4 * 3600 + 5 * 60 + 5));
         data_days.insert(ProviderId::Codex, usage_days);
 
         let header_days = reset_countdown_header(&data_days, LanguageId::Korean).unwrap();
