@@ -413,7 +413,7 @@ mod tests {
         let header = reset_countdown_header(&data, LanguageId::Korean);
         assert!(header.is_some());
         let text = header.unwrap();
-        assert!(text.contains("⏰ 세션 리셋까지"));
+        assert!(text.contains("⏰ Claude Code 세션 리셋까지"));
         assert!(text.contains("2시간 30분"));
 
         // Days format
@@ -424,7 +424,7 @@ mod tests {
         data_days.insert(ProviderId::Codex, usage_days);
 
         let header_days = reset_countdown_header(&data_days, LanguageId::Korean).unwrap();
-        assert!(header_days.contains("1일 4시간 5분"));
+        assert!(header_days.contains("⏰ Codex 세션 리셋까지 1일 4시간 5분"));
 
         // Under 60 seconds (total_mins == 0)
         let mut data_zero = AppUsageData::default();
@@ -433,7 +433,7 @@ mod tests {
         usage_zero.session.resets_at = Some(now + Duration::from_secs(30));
         data_zero.insert(ProviderId::Claude, usage_zero);
         let header_zero = reset_countdown_header(&data_zero, LanguageId::Korean).unwrap();
-        assert_eq!(header_zero, "⏰ 지금");
+        assert_eq!(header_zero, "⏰ Claude Code 세션 리셋 지금");
     }
 
     #[test]

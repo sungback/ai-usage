@@ -273,14 +273,21 @@ impl AppUsageData {
             .map(|account| account.profile.name.as_str())
     }
 
-    /// 메뉴 맨 윗줄("리셋까지 N시간")용: 세션 리셋 중 가장 이른 미래 시각.
+    /// 메뉴 맨 윗줄("리셋까지 N시간")용: 세션 리셋 중 가장 이른 미래 시각 및 해당 공급자.
     /// 과거 시각·없음은 제외하므로 호출자는 None이면 헤더를 숨기면 된다.
-    pub fn earliest_session_reset(&self) -> Option<SystemTime> {
+    pub fn earliest_session_reset_entry(&self) -> Option<(ProviderId, SystemTime)> {
         let now = SystemTime::now();
-        self.all_usage()
-            .filter_map(|usage| usage.session.resets_at)
-            .filter(|resets_at| *resets_at > now)
-            .min()
+        self.session_entries()
+            .into_iter()
+            .filter_map(|(provider, usage)| {
+                usage.session.resets_at.filter(|&t| t > now).map(|t| (provider, t))
+            })
+            .min_by_key(|&(_, t)| t)
+    }
+
+    #[allow(dead_code)]
+    pub fn earliest_session_reset(&self) -> Option<SystemTime> {
+        self.earliest_session_reset_entry().map(|(_, t)| t)
     }
     /// 공급자별 세션 사용량 묶음 (기본 맵 + 선택 계정).
     fn session_entries(&self) -> Vec<(ProviderId, &UsageData)> {
@@ -402,17 +409,22 @@ pub fn format_reset_time(resets_at: Option<SystemTime>) -> Option<String> {
     }
 }
 
-/// 트레이/위젯 컨텍스트 메뉴 최상단 세션 리셋 카운트다운 헤더 문구.
+/// 트레이/위젯 컨텍스트 메뉴 최상단 세션 리셋 카운트다운 헤더 문구 (예: "⏰ Codex 세션 리셋까지 1시간 12분").
 pub fn reset_countdown_header(
     data: &AppUsageData,
     lang: LanguageId,
 ) -> Option<String> {
-    let resets_at = data.earliest_session_reset()?;
+    let (provider, resets_at) = data.earliest_session_reset_entry()?;
     let remaining = resets_at.duration_since(SystemTime::now()).ok()?;
     let strings = lang.strings();
+    let provider_name = lang.text(provider.descriptor().display_name);
     let total_mins = remaining.as_secs() / 60;
     if total_mins == 0 {
-        return Some(format!("⏰ {}", strings.now));
+        return if lang.code() == "ko" {
+            Some(format!("⏰ {provider_name} 세션 리셋 {now_text}", now_text = strings.now))
+        } else {
+            Some(format!("⏰ {provider_name} session reset now"))
+        };
     }
     if lang.code() == "ko" {
         let days = total_mins / (24 * 60);
@@ -428,10 +440,10 @@ pub fn reset_countdown_header(
         } else {
             format!("{}{}", mins, strings.minute_suffix)
         };
-        Some(format!("⏰ 세션 리셋까지 {body}"))
+        Some(format!("⏰ {provider_name} 세션 리셋까지 {body}"))
     } else {
         Some(format!(
-            "⏰ Session reset in {}",
+            "⏰ {provider_name} session reset in {}",
             format_reset_time(Some(resets_at))?
         ))
     }
@@ -827,7 +839,7 @@ mod tests {
         let header = reset_countdown_header(&data, LanguageId::Korean);
         assert!(header.is_some());
         let text = header.unwrap();
-        assert!(text.contains("⏰ 세션 리셋까지"));
+        assert!(text.contains("⏰ Claude Code 세션 리셋까지"));
         assert!(text.contains("2시간 30분"));
     }
 
