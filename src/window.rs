@@ -1406,7 +1406,7 @@ fn total_widget_width_for_state(state: &AppState) -> i32 {
 }
 
 fn widget_frame_for_state(state: &AppState, nest: Option<SurfaceNest>) -> positioning::WidgetFrame {
-    if state.taskbar_ring_badge && matches!(nest, None | Some(SurfaceNest::Taskbar)) {
+    if state.taskbar_ring_badge && nest != Some(SurfaceNest::TrayIcon) {
         let count = state.providers.iter().count().max(1) as i32;
         let ring_size = 40;
         let gap = 4;
@@ -2225,80 +2225,43 @@ fn render_layered() {
             continue;
         }
 
-        if surface_index == 0 && nest == SurfaceNest::Taskbar && taskbar_ring_badge {
-            let settings = app_settings::load_settings();
-            let default_data = AppUsageData::default();
-            let data_ref = usage_data.as_ref().unwrap_or(&default_data);
-            let scale = theme_surface_scale(&theme, 0);
-            let target_ring_size = ((40.0 * scale).round() as u32).max(16);
-            let target_gap = ((4.0 * scale).round() as u32).max(1);
-            let target_canvas_height = ((46.0 * scale).round() as u32).max(target_ring_size);
-
-            if let Some(ring_img) = crate::platform::ring_badge::render_ring_badge_image_at_size(
-                data_ref,
-                &settings,
-                target_ring_size,
-                target_gap,
-            ) {
-                let y_offset = (target_canvas_height.saturating_sub(ring_img.height())) / 2;
-                let mut padded_img = image::RgbaImage::new(ring_img.width(), target_canvas_height);
-                for y in 0..ring_img.height() {
-                    for x in 0..ring_img.width() {
-                        padded_img.put_pixel(x, y + y_offset, *ring_img.get_pixel(x, y));
-                    }
-                }
-                let bgra = crate::platform::ring_badge::rgba_to_bgra_premultiplied(&padded_img);
-                let rendered = theme_engine::RenderedTheme {
-                    width: padded_img.width(),
-                    height: target_canvas_height,
-                    pixels: bgra,
-                    warnings: Vec::new(),
-                };
-                let mut positioned = theme_for_surface(&theme, 0);
-                positioned.canvas.width = (padded_img.width() as f64 / scale).round().max(1.0) as u32;
-                positioned.canvas.height = (target_canvas_height as f64 / scale).round().max(1.0) as u32;
+        // 동심원 링 배지가 켜져 있으면 작업표시줄·플로팅·데스크톱 위치 모두 첫 서피스를 링으로 그립니다.
+        let ring_surface = if surface_index == 0 && taskbar_ring_badge {
+            render_ring_badge_surface(&theme, usage_data.as_ref(), surface_runtime)
+        } else {
+            None
+        };
+        let (rendered, positioned, scale) = match ring_surface {
+            Some(ring_surface) => ring_surface,
+            None => {
+                let scale = theme_surface_scale(&theme, surface_index);
+                let rendered = theme_engine::render_theme_surface_with_runtime_at_scale(
+                    &theme,
+                    surface_index,
+                    usage_data.as_ref(),
+                    surface_runtime,
+                    scale,
+                );
+                let mut positioned = theme_for_surface(&theme, surface_index);
+                let (logical_width, logical_height) = theme_engine::resolve_surface_size(
+                    &theme,
+                    surface_index,
+                    usage_data.as_ref(),
+                    surface_runtime,
+                );
+                positioned.canvas.width = logical_width;
+                positioned.canvas.height = logical_height;
                 let placement = theme_engine::resolve_surface_placement(
                     &theme,
-                    0,
+                    surface_index,
                     usage_data.as_ref(),
                     surface_runtime,
                 );
                 positioned.placement.offset_x = placement.offset_x;
                 positioned.placement.offset_y = placement.offset_y;
-                position_custom_theme(regular_hwnd, &positioned, scale);
-                render_custom_window(regular_hwnd, &rendered, false);
-                unsafe {
-                    let _ = ShowWindow(regular_hwnd, SW_SHOWNOACTIVATE);
-                }
-                continue;
+                (rendered, positioned, scale)
             }
-        }
-
-        let scale = theme_surface_scale(&theme, surface_index);
-        let rendered = theme_engine::render_theme_surface_with_runtime_at_scale(
-            &theme,
-            surface_index,
-            usage_data.as_ref(),
-            surface_runtime,
-            scale,
-        );
-        let mut positioned = theme_for_surface(&theme, surface_index);
-        let (logical_width, logical_height) = theme_engine::resolve_surface_size(
-            &theme,
-            surface_index,
-            usage_data.as_ref(),
-            surface_runtime,
-        );
-        positioned.canvas.width = logical_width;
-        positioned.canvas.height = logical_height;
-        let placement = theme_engine::resolve_surface_placement(
-            &theme,
-            surface_index,
-            usage_data.as_ref(),
-            surface_runtime,
-        );
-        positioned.placement.offset_x = placement.offset_x;
-        positioned.placement.offset_y = placement.offset_y;
+        };
         position_custom_theme(target_hwnd, &positioned, scale);
         if desktop_nested {
             unsafe {
@@ -2322,6 +2285,50 @@ fn render_layered() {
         }
     }
 }
+/// 첫 서피스 자리에 들어갈 동심원 링 배지 이미지와 위치 정보를 만듭니다.
+/// 활성 공급자가 없어 링을 그릴 수 없으면 None을 돌려주고, 호출부는 테마 렌더링으로 대체합니다.
+fn render_ring_badge_surface(
+    theme: &ThemeDocument,
+    usage_data: Option<&AppUsageData>,
+    surface_runtime: theme_engine::ThemeRuntime,
+) -> Option<(theme_engine::RenderedTheme, ThemeDocument, f64)> {
+    let settings = app_settings::load_settings();
+    let default_data = AppUsageData::default();
+    let data_ref = usage_data.unwrap_or(&default_data);
+    let scale = theme_surface_scale(theme, 0);
+    let target_ring_size = ((40.0 * scale).round() as u32).max(16);
+    let target_gap = ((4.0 * scale).round() as u32).max(1);
+    let target_canvas_height = ((46.0 * scale).round() as u32).max(target_ring_size);
+
+    let ring_img = crate::platform::ring_badge::render_ring_badge_image_at_size(
+        data_ref,
+        &settings,
+        target_ring_size,
+        target_gap,
+    )?;
+    let y_offset = (target_canvas_height.saturating_sub(ring_img.height())) / 2;
+    let mut padded_img = image::RgbaImage::new(ring_img.width(), target_canvas_height);
+    for y in 0..ring_img.height() {
+        for x in 0..ring_img.width() {
+            padded_img.put_pixel(x, y + y_offset, *ring_img.get_pixel(x, y));
+        }
+    }
+    let bgra = crate::platform::ring_badge::rgba_to_bgra_premultiplied(&padded_img);
+    let rendered = theme_engine::RenderedTheme {
+        width: padded_img.width(),
+        height: target_canvas_height,
+        pixels: bgra,
+        warnings: Vec::new(),
+    };
+    let mut positioned = theme_for_surface(theme, 0);
+    positioned.canvas.width = (padded_img.width() as f64 / scale).round().max(1.0) as u32;
+    positioned.canvas.height = (target_canvas_height as f64 / scale).round().max(1.0) as u32;
+    let placement = theme_engine::resolve_surface_placement(theme, 0, usage_data, surface_runtime);
+    positioned.placement.offset_x = placement.offset_x;
+    positioned.placement.offset_y = placement.offset_y;
+    Some((rendered, positioned, scale))
+}
+
 fn theme_for_surface(theme: &ThemeDocument, surface_index: usize) -> ThemeDocument {
     let mut result = theme.clone();
     if let Some(surface) = theme.surfaces.get(surface_index) {

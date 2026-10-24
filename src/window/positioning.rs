@@ -19,14 +19,14 @@ pub(super) fn position_at_taskbar() {
         state.as_ref().and_then(|s| {
             if s.custom_theme_enabled {
                 effective_theme_from_state(s).map(|mut theme| {
-                    let is_taskbar = theme.surfaces.first().is_some_and(|surface| {
+                    let is_tray_icon = theme.surfaces.first().is_some_and(|surface| {
                         surface
                             .placement
                             .nest
                             .resolve(surface.placement.reference.region)
-                            == SurfaceNest::Taskbar
+                            == SurfaceNest::TrayIcon
                     });
-                    if s.taskbar_ring_badge && is_taskbar {
+                    if s.taskbar_ring_badge && !is_tray_icon {
                         let count = s.providers.iter().count().max(1) as u32;
                         let ring_size = 40u32;
                         let gap = 4u32;
